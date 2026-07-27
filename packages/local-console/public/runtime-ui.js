@@ -14,10 +14,10 @@ export function runtimePresentation(config = {}) {
   };
 }
 
-// Non-sensitive ACS provider summary rendered next to the mode copy and the
-// right-side "ACS Cluster" card. Values come from the Provider Registry and the
+// Non-sensitive cloud provider summary rendered next to the mode copy. Values
+// come from the Provider Registry and the
 // /api/ui-config payload; they MUST NOT include any keys, tokens, or secrets.
-export function acsClusterPresentation(config = {}) {
+export function cloudProviderPresentation(config = {}) {
   if (config.deploymentMode !== "cloud") return null;
   const region = config.region || null;
   const templateId = config.templateId || null;
@@ -42,3 +42,5 @@ export function acsClusterPresentation(config = {}) {
     capabilities,
   };
 }
+
+export const acsClusterPresentation = cloudProviderPresentation;

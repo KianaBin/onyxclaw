@@ -122,6 +122,16 @@ test("rejects unsafe endpoints and invalid sandbox paths", async (t) => {
   );
 });
 
+test("rejects unknown provider-specific SDK patches", async (t) => {
+  const config = validConfig();
+  config.providers["vendor-a"].api.sdkPatch = "another-vendor-patch";
+
+  await assert.rejects(
+    fixture(t, config),
+    /api\.sdkPatch must be none or kruise-agents-private-protocol/,
+  );
+});
+
 test("allows insecure endpoints only when explicitly restricted to a VPC", async (t) => {
   const config = validConfig();
   const selected = config.providers["vendor-a"];

@@ -78,8 +78,8 @@ test("APP release tags publish a dedicated immutable container", async () => {
 test("cloud APP shares Sandbox Service telemetry between the ACS adapter and UI", async () => {
   const source = await read("packages/cloud-runtime/src/cloud-app.js");
   assert.match(source, /createSandboxServiceMonitor/);
-  assert.match(source, /createAlibabaAcsAdapter\(\{[\s\S]*operationMonitor/);
+  assert.match(source, /createE2BCompatibleAdapter\(\{[\s\S]*operationMonitor/);
   assert.match(source, /createLocalConsoleServer\(\{[\s\S]*operationMonitor/);
   assert.match(source, /deploymentMode:\s*"cloud"/);
-  assert.match(source, /providerId:\s*"alicloud-acs"/);
+  assert.match(source, /providerId,/);
 });

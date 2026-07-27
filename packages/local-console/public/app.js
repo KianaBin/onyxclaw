@@ -74,6 +74,9 @@ const elements = {
   runtimeInstanceId: document.querySelector("#runtime-instance-id"),
   runtimeConnectionId: document.querySelector("#runtime-connection-id"),
   enterLobsterMode: document.querySelector("#enter-lobster-mode"),
+  providerManagerLabel: document.querySelector("#provider-manager-label"),
+  modelProviderLabel: document.querySelector("#model-provider-label"),
+  modelNameLabel: document.querySelector("#model-name-label"),
 };
 
 let helloShown = false;
@@ -106,6 +109,9 @@ function applyRuntimePresentation(config) {
   const presentation = runtimePresentation(config);
   elements.environmentLabel.textContent = presentation.environmentLabel;
   elements.modeCopy.textContent = presentation.modeCopy;
+  elements.providerManagerLabel.textContent = config.providerName || "Sandbox Manager";
+  elements.modelProviderLabel.textContent = (config.modelProvider || "MODEL API").toUpperCase();
+  elements.modelNameLabel.textContent = config.modelName || "Configured model";
   // The runtime strip is shown only in cloud mode (when the provider is
   // configured) so local macOS mode keeps the original phone layout.
   const cloud = config.deploymentMode === "cloud";
@@ -253,6 +259,21 @@ function renderCalls(calls) {
       const value = document.createElement("code");
       value.textContent = call.operationContext.value;
       value.title = call.operationContext.value;
+      detail.append(label, value);
+      row.append(detail);
+    }
+    if (call.error?.message) {
+      const detail = document.createElement("div");
+      detail.className = "api-operation-detail api-error-detail";
+      const label = document.createElement("strong");
+      label.textContent = call.error.statusCode
+        ? `ERROR ${call.error.statusCode}`
+        : "ERROR";
+      const value = document.createElement("code");
+      value.textContent = call.error.message;
+      value.title = call.error.requestId
+        ? `${call.error.message} · requestId=${call.error.requestId}`
+        : call.error.message;
       detail.append(label, value);
       row.append(detail);
     }

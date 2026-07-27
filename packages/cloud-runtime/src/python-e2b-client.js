@@ -9,12 +9,30 @@ const defaultBridgePath = path.join(
   "e2b-bridge.py",
 );
 
+function redact(value, secrets) {
+  let safe = String(value);
+  for (const secret of secrets) {
+    if (typeof secret === "string" && secret) safe = safe.replaceAll(secret, "[REDACTED]");
+  }
+  return safe.replace(
+    /((?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret)\s*[=:]\s*)([^\s,;]+)/gi,
+    "$1[REDACTED]",
+  );
+}
+
+function defaultLogger(record) {
+  process.stderr.write(`${JSON.stringify({
+    timestamp: new Date().toISOString(),
+    ...record,
+  })}\n`);
+}
+
 class PythonBridge {
   #child;
   #pending = new Map();
   #requestTimeoutMs;
 
-  constructor({ pythonPath, bridgePath, spawnImpl, env, requestTimeoutMs }) {
+  constructor({ pythonPath, bridgePath, spawnImpl, env, requestTimeoutMs, logger }) {
     this.#requestTimeoutMs = requestTimeoutMs;
     this.#child = spawnImpl(pythonPath, [bridgePath], {
       env,
@@ -22,8 +40,29 @@ class PythonBridge {
     });
     const lines = createInterface({ input: this.#child.stdout });
     lines.on("line", (line) => this.#receive(line));
-    this.#child.once("error", (error) => this.#failAll(error));
+    const stderrLines = createInterface({ input: this.#child.stderr });
+    stderrLines.on("line", (line) => logger({
+      level: "error",
+      event: "e2b.bridge.stderr",
+      message: redact(line, [env.E2B_API_KEY]),
+    }));
+    this.#child.once("error", (error) => {
+      logger({
+        level: "error",
+        event: "e2b.bridge.spawn_failed",
+        error: { name: error.name, message: redact(error.message, [env.E2B_API_KEY]) },
+      });
+      this.#failAll(error);
+    });
     this.#child.once("exit", (code, signal) => {
+      if (code !== 0 || signal) {
+        logger({
+          level: "error",
+          event: "e2b.bridge.exited",
+          code,
+          signal,
+        });
+      }
       this.#failAll(new Error(`E2B bridge exited (${code ?? signal})`));
     });
   }
@@ -42,6 +81,13 @@ class PythonBridge {
     if (response.error) {
       const error = new Error(response.error.message || "E2B bridge operation failed");
       error.code = response.error.code;
+      error.name = response.error.type || "E2BBridgeError";
+      if (response.error.statusCode !== undefined) {
+        error.statusCode = response.error.statusCode;
+      }
+      if (response.error.requestId !== undefined) {
+        error.requestId = response.error.requestId;
+      }
       pending.reject(error);
     } else {
       pending.resolve(response.result);
@@ -112,17 +158,20 @@ export function createPythonE2BClientFactory({
   pythonPath = process.env.ONYXCLAW_E2B_PYTHON ?? "python3",
   bridgePath = defaultBridgePath,
   spawnImpl = spawn,
+  logger = defaultLogger,
 } = {}) {
-  return ({ apiKey, baseUrl, requestTimeoutMs }) => {
+  return ({ apiKey, baseUrl, requestTimeoutMs, sdkPatch = "none" }) => {
     const bridge = new PythonBridge({
       pythonPath,
       bridgePath,
       spawnImpl,
       requestTimeoutMs,
+      logger,
       env: {
         ...process.env,
         E2B_API_KEY: apiKey,
         E2B_BASE_URL: baseUrl,
+        E2B_SDK_PATCH: sdkPatch,
       },
     });
     return {

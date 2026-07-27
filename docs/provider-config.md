@@ -17,7 +17,7 @@ SSRF 和配置注入。
 | 分类 | 必需信息 | 配置位置 |
 | --- | --- | --- |
 | Provider 身份 | 稳定 ID、展示名称 | Profile |
-| 兼容契约 | E2B API/SDK 兼容版本、已知差异 | `api.compatibilityVersion` 和对接记录 |
+| 兼容契约 | E2B API/SDK 兼容版本、已知差异 | `api.compatibilityVersion`、`api.sdkPatch` 和对接记录 |
 | API 地址 | 控制面 Base URL | `api.baseUrl` |
 | API 认证 | API Key 的环境变量名、认证 Header 是否兼容 | `api.apiKeyEnv`；真实值进 Secret Manager |
 | Template | Template ID、默认 OS/用户、Node/OpenClaw 是否预装 | `sandbox`、`openclaw` |
@@ -93,6 +93,8 @@ ONYXCLAW_PROVIDER=vendor-a
 - HTTP/WS 只允许 loopback mock；
 - workspace 和 HOME 必须是绝对路径；
 - timeout、Gateway port 必须是正整数；
+- `api.sdkPatch` 只能是标准协议的 `none` 或 ACS Private Protocol 所需的
+  `kruise-agents-private-protocol`；
 - provider ID 只能包含小写字母、数字和连字符；
 - 所有被引用的 Secret 环境变量一次性检查并完整报告；
 - 对浏览器只暴露 ID、展示名称、协议和 capability flags。
@@ -102,6 +104,7 @@ ONYXCLAW_PROVIDER=vendor-a
 1. 复制 `providers.example.json` 中的 Profile；
 2. 使用新的稳定 provider ID 和独立的 Secret 环境变量名；
 3. 填写 API URL、Template、路径、网络和能力声明；
+   标准 E2B 兼容服务保持 `api.sdkPatch: "none"`，不要加载其他厂商的 SDK patch；
 4. 运行 Registry 单元测试和配置校验；
 5. 运行 E2B contract tests；
 6. 运行 `create → command → file → pause → connect → file → kill`；

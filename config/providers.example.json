@@ -9,6 +9,7 @@
         "baseUrl": "https://sandbox-api.vendor-a.example",
         "apiKeyEnv": "VENDOR_A_E2B_API_KEY",
         "compatibilityVersion": "e2b-v2",
+        "sdkPatch": "none",
         "requestTimeoutMs": 30000
       },
       "sandbox": {

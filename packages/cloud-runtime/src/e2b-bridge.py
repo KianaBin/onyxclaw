@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Minimal JSON-lines bridge between the Node BFF and the ACS E2B SDK."""
+"""Minimal JSON-lines bridge between the Node BFF and an E2B-compatible SDK."""
 
 import base64
 import json
 import os
+import re
 import sys
 from urllib.parse import urlparse
 
@@ -13,15 +14,47 @@ if base_url.scheme not in ("http", "https") or not base_url.netloc:
     raise RuntimeError("E2B_BASE_URL must be an HTTP(S) URL")
 os.environ["E2B_DOMAIN"] = base_url.netloc
 
-from kruise_agents.patch_e2b import patch_e2b
+sdk_patch = os.environ.get("E2B_SDK_PATCH", "none")
+if sdk_patch == "kruise-agents-private-protocol":
+    from kruise_agents.patch_e2b import patch_e2b
 
-patch_e2b(https=base_url.scheme == "https")
+    patch_e2b(https=base_url.scheme == "https")
+elif sdk_patch != "none":
+    raise RuntimeError(f"unsupported E2B_SDK_PATCH: {sdk_patch}")
 from e2b import Sandbox
 
 
 api_key = os.environ["E2B_API_KEY"]
 route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
+
+
+def safe_error(error):
+    """Return useful diagnostics without exposing credentials."""
+    message = str(error) or type(error).__name__
+    if api_key:
+        message = message.replace(api_key, "[REDACTED]")
+    message = re.sub(
+        r"(?i)((?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret)"
+        r"\s*[=:]\s*)[^\s,;]+",
+        r"\1[REDACTED]",
+        message,
+    )[:4000]
+    detail = {
+        "code": "E2B_BRIDGE_OPERATION_FAILED",
+        "message": message,
+        "type": type(error).__name__,
+    }
+    for source, target in (
+        ("status_code", "statusCode"),
+        ("status", "statusCode"),
+        ("request_id", "requestId"),
+        ("requestId", "requestId"),
+    ):
+        value = getattr(error, source, None)
+        if isinstance(value, (str, int)) and value != "":
+            detail[target] = value
+    return detail
 
 
 def routed(session):
@@ -88,16 +121,14 @@ def dispatch(op, params):
 
 
 for line in sys.stdin:
+    request = None
     try:
         request = json.loads(line)
         result = dispatch(request["op"], request.get("params", {}))
         response = {"id": request["id"], "result": result}
     except Exception as error:
         response = {
-            "id": request.get("id") if "request" in locals() else None,
-            "error": {
-                "code": "E2B_BRIDGE_OPERATION_FAILED",
-                "message": f"bridge operation failed ({type(error).__name__})",
-            },
+            "id": request.get("id") if isinstance(request, dict) else None,
+            "error": safe_error(error),
         }
     print(json.dumps(response, separators=(",", ":")), flush=True)

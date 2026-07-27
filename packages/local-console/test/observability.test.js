@@ -62,6 +62,14 @@ test("monitor updates Sandbox object lifecycle and retains bounded history", () 
   now += 20;
   monitor.fail(command, {
     object: { type: "Process", id: "sandbox-1", state: "failed" },
+    error: {
+      name: "CommandException",
+      code: "COMMAND_FAILED",
+      message: "envd returned 503",
+      statusCode: 503,
+      requestId: "request-1",
+      unsafe: "must not be retained",
+    },
   });
   const kill = monitor.begin({
     api: "Sandbox.kill",
@@ -80,8 +88,15 @@ test("monitor updates Sandbox object lifecycle and retains bounded history", () 
     label: "COMMAND",
     value: "node --check app.js",
   });
+  assert.deepEqual(snapshot.calls[1].error, {
+    name: "CommandException",
+    code: "COMMAND_FAILED",
+    message: "envd returned 503",
+    statusCode: 503,
+    requestId: "request-1",
+  });
   assert.equal(snapshot.objects.find((object) => object.type === "Sandbox").state, "terminated");
-  assert.doesNotMatch(JSON.stringify(snapshot), /secret command/);
+  assert.doesNotMatch(JSON.stringify(snapshot), /secret command|must not be retained/);
 });
 
 test("monitor exposes operation context while running and after success", () => {

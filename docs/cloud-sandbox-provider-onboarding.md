@@ -414,7 +414,7 @@ port-forward Manager
 | 内容 | 路径 |
 | --- | --- |
 | Provider 校验和 Secret 映射 | `packages/cloud-config/src/provider-registry.js` |
-| ACS Adapter | `packages/cloud-runtime/src/alibaba-acs-adapter.js` |
+| E2B-compatible Adapter | `packages/cloud-runtime/src/e2b-compatible-adapter.js` |
 | Node/Python SDK Bridge | `packages/cloud-runtime/src/python-e2b-client.js`、`e2b-bridge.py` |
 | Bootstrap Saga | `packages/cloud-runtime/src/openclaw-bootstrap.js` |
 | Sandbox Service 观测 | `packages/local-console/src/observability.js` |

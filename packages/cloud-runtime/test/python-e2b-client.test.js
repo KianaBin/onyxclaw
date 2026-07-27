@@ -51,6 +51,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
     apiKey: "runtime-secret",
     baseUrl: "http://sandbox-manager.sandbox-system.svc.cluster.local:7788",
     requestTimeoutMs: 30_000,
+    sdkPatch: "kruise-agents-private-protocol",
   });
   const session = await client.create({ template: "onyxclaw", timeoutSeconds: 300 });
 
@@ -69,6 +70,10 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   assert.deepEqual(fake.calls[0].args, ["/app/e2b-bridge.py"]);
   assert.equal(fake.calls[0].options.env.E2B_API_KEY, "runtime-secret");
   assert.equal(fake.calls[0].options.env.E2B_BASE_URL, "http://sandbox-manager.sandbox-system.svc.cluster.local:7788");
+  assert.equal(
+    fake.calls[0].options.env.E2B_SDK_PATCH,
+    "kruise-agents-private-protocol",
+  );
   assert.doesNotMatch(JSON.stringify(fake.requests), /runtime-secret/);
   assert.deepEqual(fake.requests.map(({ op }) => op), [
     "create",
@@ -79,37 +84,60 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   ]);
 });
 
-test("surfaces bridge errors without including stderr or process environment", async () => {
+test("surfaces detailed bridge errors and logs redacted bridge stderr", async () => {
   const fake = fakeSpawner();
+  const logs = [];
   const original = fake.spawnImpl;
   fake.spawnImpl = (...args) => {
     const child = original(...args);
+    queueMicrotask(() =>
+      child.stderr.write("SDK traceback: api_key=runtime-secret\n"));
     child.stdin = new Writable({
       write(chunk, _encoding, callback) {
         const request = JSON.parse(chunk.toString());
         queueMicrotask(() => child.stdout.write(`${JSON.stringify({
           id: request.id,
-          error: { code: "E2B_CREATE_FAILED", message: "bridge operation failed" },
+          error: {
+            code: "E2B_CREATE_FAILED",
+            type: "AuthenticationException",
+            message: "invalid credential",
+            statusCode: 401,
+            requestId: "cloud-request-1",
+          },
         })}\n`));
         callback();
       },
     });
     return child;
   };
-  const client = createPythonE2BClientFactory({ spawnImpl: fake.spawnImpl })({
+  const client = createPythonE2BClientFactory({
+    spawnImpl: fake.spawnImpl,
+    logger: (record) => logs.push(record),
+  })({
     apiKey: "runtime-secret",
     baseUrl: "http://127.0.0.1:18081",
     requestTimeoutMs: 1000,
   });
 
-  await assert.rejects(client.create({ template: "onyxclaw" }), /bridge operation failed/);
+  await assert.rejects(client.create({ template: "onyxclaw" }), (error) => {
+    assert.equal(error.name, "AuthenticationException");
+    assert.equal(error.code, "E2B_CREATE_FAILED");
+    assert.equal(error.message, "invalid credential");
+    assert.equal(error.statusCode, 401);
+    assert.equal(error.requestId, "cloud-request-1");
+    return true;
+  });
+  assert.equal(logs[0].event, "e2b.bridge.stderr");
+  assert.match(logs[0].message, /\[REDACTED\]/);
+  assert.doesNotMatch(JSON.stringify(logs), /runtime-secret/);
 });
 
-test("Python bridge applies the ACS patch before E2B import and returns safe errors", async () => {
+test("Python bridge applies the provider patch before E2B import and returns safe errors", async () => {
   const source = await readFile(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/e2b-bridge.py"),
     "utf8",
   );
+  assert.ok(source.indexOf("sdk_patch ==") < source.indexOf("from e2b import Sandbox"));
   assert.ok(source.indexOf("patch_e2b(") < source.indexOf("from e2b import Sandbox"));
   assert.match(source, /"create"|op == "create"/);
   assert.match(source, /"connect"|op == "connect"/);
@@ -117,5 +145,7 @@ test("Python bridge applies the ACS patch before E2B import and returns safe err
   assert.match(source, /"writeFile"|op == "writeFile"/);
   assert.match(source, /"readFile"|op == "readFile"/);
   assert.match(source, /"kill"|op == "kill"/);
+  assert.match(source, /"statusCode"/);
+  assert.match(source, /"requestId"/);
   assert.doesNotMatch(source, /print\([^\n]*(E2B_API_KEY|api_key)/);
 });

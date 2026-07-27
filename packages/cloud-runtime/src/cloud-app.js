@@ -7,8 +7,8 @@ import { createLocalConsoleServer } from "../../local-console/src/server.js";
 import { createSandboxServiceMonitor } from "../../local-console/src/observability.js";
 import { WsPlatformSimulator } from "../../test-orchestrator/src/ws-simulator.js";
 import {
-  createAlibabaAcsAdapter,
-} from "./alibaba-acs-adapter.js";
+  createE2BCompatibleAdapter,
+} from "./e2b-compatible-adapter.js";
 import { CloudConsoleController } from "./cloud-controller.js";
 import { buildOpenClawConfig, CloudGatewayProbe } from "./cloud-app-support.js";
 import { OpenClawBootstrapSaga } from "./openclaw-bootstrap.js";
@@ -25,11 +25,13 @@ if (!baseConfigSource) throw new Error("ONYXCLAW_OPENCLAW_BASE_CONFIG_JSON is re
 const baseConfig = JSON.parse(baseConfigSource);
 
 const registry = await loadProviderRegistry({ configPath: providerConfigPath });
-const provider = registry.getProvider("alicloud-acs");
-const secrets = registry.getSecrets("alicloud-acs");
+const providerId = registry.defaultProviderId;
+const provider = registry.getProvider(providerId);
+const secrets = registry.getSecrets(providerId);
 const operationMonitor = createSandboxServiceMonitor();
-const adapter = createAlibabaAcsAdapter({
+const adapter = createE2BCompatibleAdapter({
   registry,
+  providerId,
   clientFactory: createPythonE2BClientFactory(),
   operationMonitor,
 });
@@ -65,9 +67,9 @@ const app = createLocalConsoleServer({
   operationMonitor,
   uiConfig: {
     deploymentMode: "cloud",
-    providerId: "alicloud-acs",
+    providerId,
     providerName: provider.displayName,
-    region: process.env.ALIBABA_CLOUD_REGION || null,
+    region: process.env.ONYXCLAW_CLOUD_REGION || process.env.ALIBABA_CLOUD_REGION || null,
     templateId: provider.sandbox?.templateId ?? null,
     gatewayPort: provider.openclaw?.gatewayPort ?? null,
     e2bHost: (() => {
@@ -79,6 +81,8 @@ const app = createLocalConsoleServer({
     })(),
     protocol: provider.protocol ?? null,
     capabilities: provider.capabilities ?? null,
+    modelProvider: provider.model?.provider ?? null,
+    modelName: provider.model?.model ?? null,
   },
   host: process.env.APP_HOST ?? "0.0.0.0",
   port: Number(process.env.APP_PORT ?? "3000"),

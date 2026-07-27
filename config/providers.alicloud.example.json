@@ -10,6 +10,7 @@
         "privateNetworkOnly": true,
         "apiKeyEnv": "ALICLOUD_ACS_E2B_API_KEY",
         "compatibilityVersion": "e2b-python-2.24-private-protocol",
+        "sdkPatch": "kruise-agents-private-protocol",
         "requestTimeoutMs": 30000
       },
       "sandbox": {

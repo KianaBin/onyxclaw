@@ -8,6 +8,21 @@ function safeObject(object) {
   return { type, id, state };
 }
 
+function safeError(error) {
+  if (!error || typeof error !== "object") return null;
+  const value = {};
+  for (const field of ["name", "code", "message", "requestId"]) {
+    if (typeof error[field] === "string" && error[field]) value[field] = error[field];
+  }
+  if (
+    typeof error.statusCode === "string" ||
+    typeof error.statusCode === "number"
+  ) {
+    value.statusCode = error.statusCode;
+  }
+  return Object.keys(value).length ? value : null;
+}
+
 export function createSandboxServiceMonitor({
   now = Date.now,
   idFactory = randomUUID,
@@ -33,6 +48,7 @@ export function createSandboxServiceMonitor({
       durationMs: call.durationMs ?? Math.max(0, currentTime - call.startedAtMs),
       startedAt: new Date(call.startedAtMs).toISOString(),
       object: call.object,
+      ...(call.error ? { error: call.error } : {}),
       ...(call.operationContext
         ? { operationContext: call.operationContext }
         : {}),
@@ -48,6 +64,7 @@ export function createSandboxServiceMonitor({
       ...call,
       state,
       object,
+      error: safeError(result.error),
       durationMs: Math.max(0, now() - call.startedAtMs),
     });
     if (history.length > historyLimit) history.length = historyLimit;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { acsClusterPresentation, runtimePresentation } from "../public/runtime-ui.js";
+import { cloudProviderPresentation, runtimePresentation } from "../public/runtime-ui.js";
 
 test("local presentation keeps macOS copy and identity", () => {
   assert.deepEqual(runtimePresentation({ deploymentMode: "local" }), {
@@ -21,10 +21,10 @@ test("cloud presentation identifies the configured provider and reflects the sin
   });
 });
 
-test("acsClusterPresentation returns null for local mode and projects safe provider fields in cloud mode", () => {
-  assert.equal(acsClusterPresentation({ deploymentMode: "local" }), null);
-  assert.equal(acsClusterPresentation({ deploymentMode: "cloud" }), null);
-  assert.deepEqual(acsClusterPresentation({
+test("cloudProviderPresentation returns null locally and projects safe provider fields in cloud mode", () => {
+  assert.equal(cloudProviderPresentation({ deploymentMode: "local" }), null);
+  assert.equal(cloudProviderPresentation({ deploymentMode: "cloud" }), null);
+  assert.deepEqual(cloudProviderPresentation({
     deploymentMode: "cloud",
     region: "cn-hangzhou",
     templateId: "onyxclaw",

@@ -63,6 +63,8 @@ export function createLocalConsoleServer({
     ...(uiConfig.e2bHost ? { e2bHost: uiConfig.e2bHost } : {}),
     ...(uiConfig.protocol ? { protocol: uiConfig.protocol } : {}),
     ...(uiConfig.capabilities ? { capabilities: uiConfig.capabilities } : {}),
+    ...(uiConfig.modelProvider ? { modelProvider: uiConfig.modelProvider } : {}),
+    ...(uiConfig.modelName ? { modelName: uiConfig.modelName } : {}),
   };
 
   async function handleApi(request, response, pathname) {

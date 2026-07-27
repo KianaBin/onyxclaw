@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  AlibabaAcsAdapter,
+  E2BCompatibleAdapter,
   CloudRuntimeError,
-  createAlibabaAcsAdapter,
-} from "../src/alibaba-acs-adapter.js";
+  createE2BCompatibleAdapter,
+} from "../src/e2b-compatible-adapter.js";
 import { createSandboxServiceMonitor } from "../../local-console/src/observability.js";
 
 function provider() {
   return {
+    displayName: "Vendor A Sandbox",
+    protocol: "e2b-compatible",
     api: {
       baseUrl: "http://127.0.0.1:18081",
       requestTimeoutMs: 30_000,
@@ -63,9 +65,9 @@ function fixture({ createError, commandError } = {}) {
   return { calls, clientFactory };
 }
 
-test("maps provider configuration into an E2B-compatible ACS client", async () => {
+test("maps provider configuration into an E2B-compatible client", async () => {
   const { calls, clientFactory } = fixture();
-  const adapter = new AlibabaAcsAdapter({
+  const adapter = new E2BCompatibleAdapter({
     provider: provider(),
     secrets: { apiKey: "runtime-secret" },
     clientFactory,
@@ -84,6 +86,7 @@ test("maps provider configuration into an E2B-compatible ACS client", async () =
     apiKey: "runtime-secret",
     baseUrl: "http://127.0.0.1:18081",
     requestTimeoutMs: 30_000,
+    sdkPatch: "none",
   }]);
   assert.deepEqual(calls[1], ["create", {
     template: "onyxclaw",
@@ -96,7 +99,7 @@ test("maps provider configuration into an E2B-compatible ACS client", async () =
 
 test("uses the configured runtime user for commands and files, then kills", async () => {
   const { calls, clientFactory } = fixture();
-  const adapter = new AlibabaAcsAdapter({
+  const adapter = new E2BCompatibleAdapter({
     provider: provider(),
     secrets: { apiKey: "runtime-secret" },
     clientFactory,
@@ -122,7 +125,7 @@ test("uses the configured runtime user for commands and files, then kills", asyn
 
 test("connects an existing Sandbox ID before operating on it", async () => {
   const { calls, clientFactory } = fixture();
-  const adapter = new AlibabaAcsAdapter({
+  const adapter = new E2BCompatibleAdapter({
     provider: provider(),
     secrets: { apiKey: "runtime-secret" },
     clientFactory,
@@ -142,30 +145,59 @@ test("connects an existing Sandbox ID before operating on it", async () => {
 
 test("wraps provider failures with a stage and redacts secrets", async () => {
   const secret = "runtime-secret-value";
+  const logs = [];
+  const providerError = new Error(`authentication failed for ${secret}`);
+  providerError.name = "AuthenticationException";
+  providerError.code = "INVALID_API_KEY";
+  providerError.statusCode = 401;
+  providerError.requestId = "request-123";
   const { clientFactory } = fixture({
-    createError: new Error(`authentication failed for ${secret}`),
+    createError: providerError,
   });
-  const adapter = new AlibabaAcsAdapter({
+  const adapter = new E2BCompatibleAdapter({
+    providerId: "vendor-a",
     provider: provider(),
     secrets: { apiKey: secret },
     clientFactory,
+    logger: (record) => logs.push(record),
   });
 
   await assert.rejects(adapter.createSandbox(), (error) => {
     assert.ok(error instanceof CloudRuntimeError);
     assert.equal(error.stage, "create");
+    assert.equal(error.providerId, "vendor-a");
     assert.equal(error.code, "CLOUD_RUNTIME_CREATE_FAILED");
+    assert.equal(error.statusCode, 401);
+    assert.equal(error.requestId, "request-123");
+    assert.doesNotMatch(error.message, /Alibaba|ACS/);
     assert.doesNotMatch(error.message, new RegExp(secret));
     assert.match(error.message, /\[REDACTED\]/);
     return true;
   });
+  assert.deepEqual(logs, [{
+    level: "error",
+    event: "sandbox.provider.operation_failed",
+    providerId: "vendor-a",
+    providerName: "Vendor A Sandbox",
+    protocol: "e2b-compatible",
+    stage: "create",
+    api: "Sandbox.create",
+    target: "Vendor A Sandbox E2B API",
+    error: {
+      name: "AuthenticationException",
+      code: "INVALID_API_KEY",
+      message: "authentication failed for [REDACTED]",
+      statusCode: 401,
+      requestId: "request-123",
+    },
+  }]);
 });
 
 test("records real E2B SDK timings, operation details, and backend objects without file content", async () => {
   let now = 100;
   const operationMonitor = createSandboxServiceMonitor({ now: () => now });
   const { clientFactory } = fixture();
-  const adapter = new AlibabaAcsAdapter({
+  const adapter = new E2BCompatibleAdapter({
     provider: provider(),
     secrets: { apiKey: "runtime-secret" },
     clientFactory,
@@ -213,7 +245,7 @@ test("records real E2B SDK timings, operation details, and backend objects witho
 test("failed command telemetry includes the executed command with secrets redacted", async () => {
   const operationMonitor = createSandboxServiceMonitor({ now: () => 100 });
   const { clientFactory } = fixture({ commandError: new Error("command failed") });
-  const adapter = new AlibabaAcsAdapter({
+  const adapter = new E2BCompatibleAdapter({
     provider: provider(),
     secrets: { apiKey: "runtime-secret" },
     clientFactory,
@@ -230,6 +262,7 @@ test("failed command telemetry includes the executed command with secrets redact
   assert.equal(failed.operationContext.label, "COMMAND");
   assert.match(failed.operationContext.value, /curl -H/);
   assert.match(failed.operationContext.value, /--token \[REDACTED\]/);
+  assert.equal(failed.error.message, "command failed");
   assert.doesNotMatch(JSON.stringify(failed), /runtime-secret|hidden-value/);
 });
 
@@ -247,12 +280,16 @@ test("builds the adapter from the shared provider registry", async () => {
     },
   };
 
-  const adapter = createAlibabaAcsAdapter({ registry, clientFactory });
+  const adapter = createE2BCompatibleAdapter({
+    registry,
+    providerId: "vendor-a",
+    clientFactory,
+  });
   await adapter.createSandbox();
 
   assert.deepEqual(registryCalls, [
-    ["provider", "alicloud-acs"],
-    ["secrets", "alicloud-acs"],
+    ["provider", "vendor-a"],
+    ["secrets", "vendor-a"],
   ]);
   assert.equal(calls[0][0], "factory");
 });

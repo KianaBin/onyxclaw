@@ -44,7 +44,7 @@
                 </div>
               </header>
 
-              <section class="runtime-strip" id="runtime-strip" hidden aria-label="ACS Sandbox 与 Channel 运行时状态">
+              <section class="runtime-strip" id="runtime-strip" hidden aria-label="云端 Sandbox 与 Channel 运行时状态">
                 <div class="runtime-strip-row">
                   <span class="runtime-label">SANDBOX</span>
                   <span class="runtime-value" id="runtime-sandbox-id">—</span>
@@ -124,7 +124,7 @@
               </header>
 
               <svg id="architecture-map" class="architecture-map" viewBox="0 0 900 360" role="img" aria-labelledby="architecture-title">
-                <title id="architecture-title">OnyxClaw APP 到 ACS Sandbox 和 MiniMax 的系统架构</title>
+                <title id="architecture-title">OnyxClaw APP 到云端 Sandbox 和模型服务的系统架构</title>
                 <defs>
                   <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker>
                   <filter id="node-glow"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
@@ -139,10 +139,10 @@
                 </g>
                 <g class="architecture-node" data-node="app" transform="translate(30 140)"><rect width="140" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">WEB APP</text><text class="node-sub" x="22" y="68">Mobile UI</text></g>
                 <g class="architecture-node" data-node="bff" transform="translate(250 140)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">NODE BFF</text><text class="node-sub" x="22" y="68">API / Saga</text></g>
-                <g class="architecture-node" data-node="e2b" transform="translate(475 50)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">E2B API</text><text class="node-sub" x="22" y="68">ACS Manager</text></g>
+                <g class="architecture-node" data-node="e2b" transform="translate(475 50)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">E2B API</text><text class="node-sub" id="provider-manager-label" x="22" y="68">Sandbox Manager</text></g>
                 <g class="architecture-node" data-node="sandbox" transform="translate(690 50)"><rect width="170" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">SANDBOX</text><text class="node-sub" x="22" y="68">OpenClaw runtime</text></g>
                 <g class="architecture-node" data-node="openclaw" transform="translate(475 230)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">CHANNEL</text><text class="node-sub" x="22" y="68">WebSocket</text></g>
-                <g class="architecture-node" data-node="model" transform="translate(690 230)"><rect width="170" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">MINIMAX</text><text class="node-sub" x="22" y="68">MiniMax-M3</text></g>
+                <g class="architecture-node" data-node="model" transform="translate(690 230)"><rect width="170" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text id="model-provider-label" x="22" y="50">MODEL API</text><text class="node-sub" id="model-name-label" x="22" y="68">Configured model</text></g>
               </svg>
               <div class="architecture-legend">
                 <span><i class="legend-dot running"></i>调用中</span>
