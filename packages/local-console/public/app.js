@@ -236,10 +236,11 @@ function renderCalls(calls) {
     const apiName = document.createElement("b");
     apiName.textContent = call.api;
     const object = document.createElement("small");
+    object.className = "api-object";
     object.textContent = call.object
       ? `${call.object.type} · ${call.object.id}`
       : "等待后端对象";
-    name.append(apiName, object);
+    name.append(apiName);
     const target = document.createElement("span");
     target.className = "api-target";
     target.textContent = call.target;
@@ -250,7 +251,7 @@ function renderCalls(calls) {
     const duration = document.createElement("span");
     duration.className = "api-duration";
     duration.textContent = formatDuration(call.durationMs);
-    row.append(name, target, state, duration);
+    row.append(name, object, target, state, duration);
     if (call.operationContext?.value) {
       const detail = document.createElement("div");
       detail.className = "api-operation-detail";

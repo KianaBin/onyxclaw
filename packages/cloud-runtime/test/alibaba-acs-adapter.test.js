@@ -182,7 +182,7 @@ test("wraps provider failures with a stage and redacts secrets", async () => {
     protocol: "e2b-compatible",
     stage: "create",
     api: "Sandbox.create",
-    target: "Vendor A Sandbox E2B API",
+    target: "E2B-Compatible Sandbox API",
     error: {
       name: "AuthenticationException",
       code: "INVALID_API_KEY",

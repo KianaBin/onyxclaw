@@ -6,7 +6,7 @@
     "ws": "^8.21.0"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.6.11"
+    "openclaw": ">=2026.5.28"
   },
   "openclaw": {
     "extensions": ["./index.js"],

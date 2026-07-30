@@ -1,5 +1,7 @@
 import path from "node:path";
 
+const SANDBOX_SERVICE_TARGET = "E2B-Compatible Sandbox API";
+
 function requiredString(value, label) {
   if (typeof value !== "string" || !value.trim()) {
     throw new TypeError(`${label} is required`);
@@ -138,7 +140,7 @@ export class E2BCompatibleAdapter {
   async createSandbox({ metadata, envs } = {}) {
     return this.#perform("create", {
       api: "Sandbox.create",
-      target: `${this.#provider.displayName ?? this.#providerId} E2B API`,
+      target: SANDBOX_SERVICE_TARGET,
       operationContext: { label: "TEMPLATE", value: this.#provider.sandbox.templateId },
       resultObject: (result) => ({
         type: "Sandbox",
@@ -161,7 +163,7 @@ export class E2BCompatibleAdapter {
     const id = requiredString(sandboxId, "sandboxId");
     return this.#perform("connect", {
       api: "Sandbox.connect",
-      target: `${this.#provider.displayName ?? this.#providerId} E2B API`,
+      target: SANDBOX_SERVICE_TARGET,
       operationContext: { label: "SANDBOX", value: id },
       object: { type: "Sandbox", id, state: "connecting" },
       resultObject: (result) => ({ type: "Sandbox", id: result.sandboxId, state: "running" }),
@@ -236,7 +238,7 @@ export class E2BCompatibleAdapter {
     const id = requiredString(sandboxId, "sandboxId");
     return this.#perform("kill", {
       api: "Sandbox.kill",
-      target: `${this.#provider.displayName ?? this.#providerId} E2B API`,
+      target: SANDBOX_SERVICE_TARGET,
       operationContext: { label: "SANDBOX", value: id },
       object: { type: "Sandbox", id, state: "terminating" },
       resultObject: () => ({ type: "Sandbox", id, state: "terminated" }),

@@ -25,7 +25,7 @@ Current implementation:
 ## Requirements
 
 - Node.js 22.19 or newer;
-- OpenClaw 2026.6.11 or a compatible version;
+- OpenClaw 2026.5.28 or a compatible version;
 - a configured local OpenClaw model provider.
 
 ## Development
@@ -94,6 +94,7 @@ manifest, immutable image reference, and checksums.
 - [Cloud validation proposal](./docs/proposal.md)
 - [Cloud provider configuration](./docs/provider-config.md)
 - [Cloud Sandbox Provider onboarding guide](./docs/cloud-sandbox-provider-onboarding.md)
+- [Huawei Cloud CCE and AgentSphere deployment](./docs/huaweicloud-agentsphere-cce-deployment.md)
 - [Alibaba Cloud ACS Agent Sandbox design](./docs/alibaba-acs-design.md)
 - [OpenClaw image adaptation for Alibaba Cloud ACS](./docs/openclaw-image-alibaba-acs-adaptation.md)
 - [Alibaba Cloud ACS OpenClaw bootstrap config](./docs/alibaba-acs-bootstrap-config.md)

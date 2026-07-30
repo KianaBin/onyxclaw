@@ -226,7 +226,7 @@ h1 em { color: var(--coral); font-weight: 500; }
 .api-operation-detail code { overflow: hidden; color: #d8e6e2; font: 9px/1.45 ui-monospace, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
 .api-name { min-width: 0; }
 .api-name b { display: block; overflow: hidden; color: #f0faf6; font: 750 12px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.api-name small { display: block; margin-top: 4px; overflow: hidden; color: #758983; font: 8px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.api-object { overflow: hidden; color: #758983; font: 8px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .api-target { overflow: hidden; color: #9eb0ab; font: 9px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .api-status { justify-self: start; padding: 5px 9px; border-radius: 999px; color: #afc1bc; background: rgba(129,147,142,.13); font: 750 8px ui-monospace, monospace; text-transform: uppercase; }
 .api-status.running { color: var(--amber); background: rgba(237,186,99,.12); }
@@ -274,8 +274,7 @@ h1 em { color: var(--coral); font-weight: 500; }
   .architecture-map { padding-inline: 3px; }
   .architecture-legend span { display: none; }
   .api-table-head, .api-row { grid-template-columns: minmax(110px, 1.2fr) 70px 56px; }
-  .api-table-head span:nth-child(2), .api-name small, .api-table-head span:nth-child(3), .api-target { display: none; }
-  .api-name small { display: none; }
+  .api-table-head span:nth-child(2), .api-object, .api-table-head span:nth-child(3), .api-target { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

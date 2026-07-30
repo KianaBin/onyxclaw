@@ -37,7 +37,7 @@ test("Terraform creates an ACS profile cluster and manages sandbox addons", asyn
 
 test("SandboxSet uses the final OpenClaw image and only the runtime needed by Phase cloud", () => {
   const manifest = renderSandboxSet({
-    image: "registry.example/onyxclaw:2026.6.11",
+    image: "registry.example/onyxclaw:2026.5.28",
     replicas: 2,
     templateName: "onyxclaw",
   });
@@ -47,7 +47,7 @@ test("SandboxSet uses the final OpenClaw image and only the runtime needed by Ph
   assert.doesNotMatch(manifest, /name: csi/);
   assert.match(manifest, /alibabacloud\.com\/compute-class: agent-sandbox/);
   assert.match(manifest, /automountServiceAccountToken: false/);
-  assert.match(manifest, /image: registry\.example\/onyxclaw:2026\.6\.11/);
+  assert.match(manifest, /image: registry\.example\/onyxclaw:2026\.5\.28/);
   assert.match(manifest, /replicas: 2/);
 });
 
@@ -105,7 +105,7 @@ test("derived OpenClaw image contains ACS tools and waits for runtime bootstrap"
     read("image/entrypoint.sh"),
   ]);
 
-  assert.match(dockerfile, /ghcr\.io\/openclaw\/openclaw:2026\.6\.11/);
+  assert.match(dockerfile, /ghcr\.io\/openclaw\/openclaw:2026\.5\.28/);
   assert.match(dockerfile, /packages\/onyxclaw-channel/);
   assert.match(dockerfile, /\/bin\/bash/);
   assert.match(dockerfile, /--omit=peer/);

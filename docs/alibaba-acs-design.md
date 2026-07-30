@@ -88,7 +88,7 @@ lifecycle events 和 volumes。官方 Python SDK 兼容范围为 `e2b < 2.25.0`�
 
 ACS 要求自定义镜像至少包含 `cp`、`mv`、`mkdir` 和 `/bin/bash`。使用自定义镜像时，
 `run_code` 暂不可用。本项目镜像从官方
-`ghcr.io/openclaw/openclaw:2026.6.11` 派生，构建时完成以下动作：
+`ghcr.io/openclaw/openclaw:2026.5.28` 派生，构建时完成以下动作：
 
 1. 复制并安装 `packages/onyxclaw-channel`；
 2. 校验 ACS 所需基础命令；

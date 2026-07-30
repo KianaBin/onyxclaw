@@ -74,7 +74,7 @@ kubectl --kubeconfig iac/alicloud-acs/generated/kubeconfig \
 展示 APP/BFF 合并完成后的结构，仅用于理解和排查，不应作为真实密钥文件直接部署。
 在仓库宿主机上直接执行 OpenClaw 配置校验时，它会提示
 `/opt/onyxclaw/channel` 不存在；该目录由派生镜像构建，因此运行时样例应在最终镜像内
-校验。基础配置输入样例可以直接在仓库环境通过 OpenClaw 2026.6.11 schema 校验。
+校验。基础配置输入样例可以直接在仓库环境通过 OpenClaw 2026.5.28 schema 校验。
 
 与基础配置相比，运行时配置发生以下变化：
 

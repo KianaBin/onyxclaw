@@ -491,7 +491,7 @@ Tester Browser
 
 ### 10.3 macOS 本机验收结果
 
-验收环境：macOS、本机 OpenClaw 2026.6.11、Node.js 22.23.1。这里的“完成”只指
+验收环境：macOS、本机 OpenClaw 2026.5.28、Node.js 22.23.1。这里的“完成”只指
 本机轨道，不包含 E2B API 和 Sandbox 生命周期。
 
 | 本机验收项 | 结果 | 证据 |
@@ -578,7 +578,7 @@ Commands 请求路由到集群内 Sandbox Gateway。该配置属于 provider 网
 
 本机先导验证已于 2026-07-19 完成：最小 Channel Plugin、WebSocket Simulator、
 session 自动重连、`SOUL.md` 写入/恢复、Gateway restart/probe、token 轮换和两轮
-消息均已在 macOS OpenClaw 2026.6.11 上自动跑通。该结果验证了应用层测试夹具，
+消息均已在 macOS OpenClaw 2026.5.28 上自动跑通。该结果验证了应用层测试夹具，
 不等同于全部云端生命周期验收完成。2026-07-19 已在阿里云 ACS 用真实 E2B SDK
 跑通 create、commands、files、OpenClaw bootstrap、自定义 Channel、MiniMax 对话和
 kill；pause/connect/resume 仍需后续补充。

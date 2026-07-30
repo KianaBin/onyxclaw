@@ -12,7 +12,7 @@ OpenClaw 镜像增加了哪些内容、各项改动解决什么问题，以及�
 本项目没有 fork 或修改 OpenClaw 核心源码，而是基于固定版本的官方镜像构建派生镜像：
 
 ```dockerfile
-ARG OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.6.11
+ARG OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.5.28
 FROM ${OPENCLAW_IMAGE}
 ```
 
@@ -34,7 +34,7 @@ FROM ${OPENCLAW_IMAGE}
 
 ### 2.1 固定上游基础镜像
 
-镜像从 `ghcr.io/openclaw/openclaw:2026.6.11` 派生，不使用浮动的 `latest`。构建参数
+镜像从 `ghcr.io/openclaw/openclaw:2026.5.28` 派生，不使用浮动的 `latest`。构建参数
 `OPENCLAW_IMAGE` 允许后续在验证新版本或使用内部镜像仓库时替换基础镜像。
 
 实现位置：`iac/alicloud-acs/image/Dockerfile`。
