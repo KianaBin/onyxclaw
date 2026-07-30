@@ -6,6 +6,32 @@ CCE，并通过 VPC 私网访问 AgentSphere 的 E2B 兼容 API。
 AgentSphere 当前处于 POC 联调阶段，本文中的 Endpoint、模板、模型和密钥名称均使用
 占位符。请向服务提供方确认实际值后替换，且不要将任何真实密钥提交到 Git。
 
+## 部署前需要准备的参数
+
+建议先把下表中的参数填入受控的部署记录或本地环境文件，再执行后续命令。带“敏感”
+标记的值只能通过 Secret、Secret Manager 或临时环境变量注入，不能写入
+`providers.agentsphere.json`、Deployment YAML 或 Git。
+
+| 参数 | 用途 | 如何获取或生成 | 敏感性 |
+| --- | --- | --- | --- |
+| 华为云 Region、CCE 集群 ID/名称 | 确定集群和资源所在地域 | 在华为云控制台进入“云容器引擎 CCE > 集群管理”查看；Region 必须与 VPC/私网 Endpoint 的地域一致 | 普通 |
+| CCE kubeconfig 或 kubectl context | 执行 `kubectl` 创建 ConfigMap、Secret 和更新 Deployment | CCE 集群详情页的“连接信息/ kubectl”下载临时 kubeconfig，或使用已有 context；下载后限制文件权限（如 `chmod 600`） | 高敏感 |
+| Kubernetes namespace | 放置 APP、ConfigMap 和 Secret | 由部署规划确定；不存在时先执行 `kubectl create namespace <namespace>`，本文命令中的 `<namespace>` 均替换为该值 | 普通 |
+| VPC ID、子网 ID、安全组 ID | 确保 CCE Pod 能访问 AgentSphere 私网入口 | 在“虚拟私有云 VPC > 我的 VPC/子网”和“虚拟私有云 VPC > 访问控制 > 安全组”查看；也可在 CCE 集群详情的网络配置中核对 | 普通 |
+| AgentSphere 私网 Endpoint FQDN、端口、协议 | 填入 `api.baseUrl`，供 APP 调用 E2B 兼容 API | 向 AgentSphere 服务提供方申请或在其控制台的接入点/PrivateLink（VPCE）详情中复制；同时确认私有 DNS Zone 已关联 CCE 所在 VPC | 普通 |
+| AgentSphere E2B API Key | 认证 Sandbox API 请求 | 在 AgentSphere 控制台的 API Keys/访问凭证页面创建，并确认作用域、地域和有效期 | 敏感 |
+| AgentSphere Template ID | 指定预装 OpenClaw 和 Channel Plugin 的 Sandbox 模板 | 在 AgentSphere 控制台的 Templates/模板列表复制；向服务方确认模板版本、架构、默认用户、Gateway 端口和工作目录 | 普通 |
+| 模型 Provider、Model ID、模型 API Key | 让 Sandbox 内的 OpenClaw 调用模型 | Provider/Model ID 由模型服务方提供；API Key 在对应模型平台的凭证页面创建。Model ID 写入 Profile，Key 只写入 Secret | Model Key 敏感 |
+| OnyxClaw Channel 可达 URL（WSS） | 让 AgentSphere Sandbox 回连 Channel | 从 Channel 的 Ingress/负载均衡/DNS 配置获取可从 Sandbox 网络访问的 `wss://.../connect` 地址；不要使用 CCE `ClusterIP` 或 `*.svc.cluster.local` | URL 普通 |
+| Channel signing secret | 校验 Sandbox 与 Channel 的握手签名 | 与 Channel 部署约定同一随机值；首次部署可本地生成 `openssl rand -hex 32`，然后仅写入 Kubernetes Secret | 敏感 |
+| Cloud APP 镜像引用（建议 digest） | 填入 Deployment 的 `image` | 从发布记录或镜像仓库复制已验证的 `registry/path:tag@sha256:...`；私有仓库还要准备 `imagePullSecret` | 引用普通；仓库凭证敏感 |
+| `openclaw-base-config.json` | 提供 OpenClaw 基础配置 | 依据目标模型和 Channel 准备，并保留字符串占位符 `__ONYXCLAW_MODEL_API_KEY__`；文件通过 Secret 挂载，不提交真实 Key | 可能含敏感配置 |
+
+部署前至少用以下信息做一次网络核对：CCE Pod 所在 VPC/子网、安全组，AgentSphere
+Endpoint 的 FQDN 和端口，私有 DNS Zone/VPCE 绑定关系，以及 Sandbox 到 Channel URL
+的出站路由、DNS 和 TLS 可达性。Endpoint、Template、Model 和 Channel 的具体值无法
+从本仓库推导，必须以 AgentSphere 服务方和网络管理员提供的值为准。
+
 ## 1. 部署目标与前提
 
 部署后的通信路径如下：
