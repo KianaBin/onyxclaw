@@ -21,11 +21,11 @@ AgentSphere 当前处于 POC 联调阶段，本文中的 Endpoint、模板、模
 | AgentSphere 私网 Endpoint FQDN、端口、协议 | 填入 `api.baseUrl`，供 APP 调用 E2B 兼容 API | 向 AgentSphere 服务提供方申请或在其控制台的接入点/PrivateLink（VPCE）详情中复制；同时确认私有 DNS Zone 已关联 CCE 所在 VPC | 普通 |
 | AgentSphere E2B API Key | 认证 Sandbox API 请求 | 在 AgentSphere 控制台的 API Keys/访问凭证页面创建，并确认作用域、地域和有效期 | 敏感 |
 | AgentSphere Template ID | 指定预装 OpenClaw 和 Channel Plugin 的 Sandbox 模板 | 在 AgentSphere 控制台的 Templates/模板列表复制；向服务方确认模板版本、架构、默认用户、Gateway 端口和工作目录 | 普通 |
-| 模型 Provider、Model ID、模型 API Key | 让 Sandbox 内的 OpenClaw 调用模型 | Provider/Model ID 由模型服务方提供；API Key 在对应模型平台的凭证页面创建。Model ID 写入 Profile，Key 只写入 Secret | Model Key 敏感 |
+| 本地 Ollama HTTP 地址、模型 ID | 让 Sandbox 内的 OpenClaw 调用本地模型 | Ollama 服务必须能从 AgentSphere Sandbox 所在网络访问；本次使用 `deepseek-r1:1.5b`，地址使用 `http://<ollama-reachable-host>:11434`，不要加 `/v1` | URL 普通 |
 | OnyxClaw Channel 可达 URL（WS/WSS） | 让 AgentSphere Sandbox 回连 Channel | POC 可使用 CCE 私网 ELB/DNS 提供的 `ws://.../connect`；生产环境再切换为 `wss://.../connect`。不要使用 CCE `ClusterIP` 或 `*.svc.cluster.local` | URL 普通 |
 | Channel signing secret | 校验 Sandbox 与 Channel 的握手签名 | 与 Channel 部署约定同一随机值；首次部署可本地生成 `openssl rand -hex 32`，然后仅写入 Kubernetes Secret | 敏感 |
 | Cloud APP 镜像引用（建议 digest） | 填入 Deployment 的 `image` | 从发布记录或镜像仓库复制已验证的 `registry/path:tag@sha256:...`；私有仓库还要准备 `imagePullSecret` | 引用普通；仓库凭证敏感 |
-| `openclaw-base-config.json` | 提供 OpenClaw 基础配置 | 依据目标模型和 Channel 准备，并保留字符串占位符 `__ONYXCLAW_MODEL_API_KEY__`；文件通过 Secret 挂载，不提交真实 Key | 可能含敏感配置 |
+| `openclaw-base-config.json` | 提供 OpenClaw 基础配置 | 使用原生 Ollama API、`deepseek-r1:1.5b` 和 `ollama-local` 标记；文件通过 Secret 挂载 | 普通配置 |
 
 部署前至少用以下信息做一次网络核对：CCE Pod 所在 VPC/子网、安全组，AgentSphere
 Endpoint 的 FQDN 和端口，私有 DNS Zone/VPCE 绑定关系，以及 Sandbox 到 Channel URL
@@ -35,60 +35,32 @@ Endpoint 的 FQDN 和端口，私有 DNS Zone/VPCE 绑定关系，以及 Sandbox
 ## 建立 CCE 到 AgentSphere 的 Channel 访问路径
 
 CCE 和 AgentSphere 是两个通过 VPC 对等连接互访的服务时，AgentSphere Sandbox 不能使用
-CCE 的 `ClusterIP` 或 `*.svc.cluster.local` 地址。应在 CCE 集群外侧为 Cloud APP 的
-Channel 端口建立一个仅绑定 CCE VPC 的私网 ELB。POC 阶段可不申请证书，使用 HTTP/TCP
-监听器直接转发 WebSocket Upgrade；生产环境再把监听器升级为 HTTPS 并使用 WSS：
+CCE 的 `ClusterIP` 或 `*.svc.cluster.local` 地址。使用一个仅绑定 CCE VPC 的私网 ELB
+Service：`3000` 转发 Cloud APP 页面和 API，`80` 转发 Channel WebSocket。POC 阶段不加载
+证书，两个监听器都使用明文 HTTP/TCP；生产环境再按域名和证书规划升级为 HTTPS/WSS：
 
 ```text
-AgentSphere Sandbox
-  │  POC: ws://channel.<private-domain>:80/connect
-  │  生产: wss://channel.<private-domain>:443/connect
-  ▼
-CCE 私网 ELB（POC 不终止 TLS；生产环境可终止 TLS）
-  │  WebSocket 转发:18890
-  ▼
-onyxclaw-app Service
-  │  targetPort: 18890
-  ▼
-Cloud APP 的 Channel WebSocket Server
+Browser / 运维网络                         AgentSphere Sandbox
+  │ http://app.<private-domain>:3000          │ ws://channel.<private-domain>:80/connect
+  └──────────────────────────┬────────────────┘
+                             ▼
+               CCE 私网 ELB / onyxclaw-app Service
+                 ├─ 3000 -> Cloud APP HTTP:3000
+                 └─   80 -> Channel WebSocket:18890
 ```
 
-### 1. 确认 APP Service 暴露 Channel 端口
+### 使用一个 CCE 私网 ELB 暴露 APP 和 Channel
 
-Cloud APP 容器必须监听 `0.0.0.0:18890`，并由 Service 暴露同名端口。若现有 Service
-没有 `channel` 端口，补充以下配置（`<namespace>` 替换为实际命名空间）：
+Cloud APP 容器已经监听 `0.0.0.0:3000` 和 `0.0.0.0:18890`。下面的单个
+`LoadBalancer` Service 同时将私网 ELB 的 `3000` 转到 APP HTTP 端口、将 `80` 转到
+Channel 端口。`kubernetes.io/elb.*` annotation 的具体名称会随 CCE 版本和 ELB 类型变化，
+应按当前 CCE 控制台或集群文档填写，重点是选择私网 ELB，不要绑定公网 EIP：
 
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: onyxclaw-app
-  namespace: <namespace>
-spec:
-  type: ClusterIP
-  selector:
-    app: onyxclaw-app
-  ports:
-    - name: http
-      port: 3000
-      targetPort: 3000
-    - name: channel
-      port: 18890
-      targetPort: 18890
-```
-
-### 2. 使用 CCE 私网 ELB 转发 WebSocket
-
-建议为 Channel 单独创建一个 `LoadBalancer` Service，让 CCE 把 Service 绑定到私网
-ELB。下面的配置表达端口和后端关系；`kubernetes.io/elb.*` annotation 的具体名称会
-随 CCE 版本和 ELB 类型变化，应按当前 CCE 控制台或集群文档填写，重点是选择私网 ELB，
-不要绑定公网 EIP：
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: onyxclaw-channel-elb
   namespace: <namespace>
   annotations:
     kubernetes.io/elb.class: performance
@@ -99,23 +71,32 @@ spec:
   selector:
     app: onyxclaw-app
   ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
     - name: ws-channel
       port: 80
       targetPort: 18890
+      protocol: TCP
 ```
 
-创建 Service 后，在 CCE 控制台“弹性负载均衡 ELB”中确认该私网 ELB 的 80（HTTP 或
-TCP）监听器：
+创建 Service 后，在 CCE 控制台“弹性负载均衡 ELB”中确认该私网 ELB 的两个监听器：
 
-1. POC 阶段不配置 TLS 证书，监听器只负责把 WebSocket Upgrade 转发到后端 `18890`；
-2. 后端服务器组指向 CCE 集群节点或 Service 自动生成的后端，后端端口为 `18890`；
-3. 开启 WebSocket/长连接转发，并将空闲连接超时设置为不小于 Channel 的心跳和重连窗口；
-4. ELB 只使用私网地址，安全组允许 AgentSphere VPC CIDR 访问 TCP 80。
+1. POC 阶段不配置 TLS 证书：`3000` 监听器将 HTTP 转发到后端 `3000`，`80` 监听器将
+   WebSocket Upgrade 转发到后端 `18890`；
+2. 后端服务器组指向 CCE 集群节点或 Service 自动生成的后端，端口分别为 `3000` 和
+   `18890`；
+3. 为 `80` 监听器开启 WebSocket/长连接转发，并将空闲连接超时设置为不小于 Channel
+   的心跳和重连窗口；
+4. ELB 只使用私网地址；安全组允许浏览器/运维网段访问 TCP `3000`，允许 AgentSphere
+   VPC CIDR 访问 TCP `80`。
 
 如果 CCE 版本不支持通过 `LoadBalancer` Service 自动复用指定 ELB，也可以先在 ELB
-控制台创建私网 ELB、80 监听器和后端组，再按 CCE 支持的 ELB ID annotation 将该 ELB
-绑定到 Service。不要改用 Ingress；POC 只需要 ELB 到 Service 的 WebSocket 转发。
-如果后续切换 WSS，再新增 443 HTTPS 监听器、证书，并把 `platformUrl` 改为 `wss://...`。
+控制台创建私网 ELB、`3000`/`80` 监听器和后端组，再按 CCE 支持的 ELB ID annotation
+将该 ELB 绑定到 Service。不要改用 Ingress；POC 只需要 ELB 到 Service 的 HTTP 和
+WebSocket 转发。如果后续切换 WSS，再新增 HTTPS 监听器、证书，并把 `platformUrl` 改为
+`wss://...`。
 
 ### 3. 配置 VPC 对等、私有 DNS 和安全策略
 
@@ -123,8 +104,8 @@ TCP）监听器：
    创建 peering 而不配置路由表；
 2. 为 `channel.<private-domain>` 创建私有 DNS 记录，解析到 CCE 私网 ELB 的地址，并将
    该私有 Zone 关联到 AgentSphere 所在 VPC；CCE CoreDNS 也必须能解析该 Zone；
-3. CCE ELB/节点安全组允许来自 AgentSphere VPC CIDR 的 TCP 80，NetworkPolicy 允许
-   AgentSphere 入口到 APP Service 的 `18890`；
+3. CCE ELB/节点安全组允许浏览器/运维网段访问 TCP `3000`、允许 AgentSphere VPC CIDR
+   访问 TCP `80`；NetworkPolicy 分别允许到 APP 的 `3000` 和 `18890`；
 4. 如果 AgentSphere 侧配置了出站 allowlist，将 `channel.<private-domain>:80` 加入；
 5. 不要给该 Channel 入口绑定 EIP，也不要把域名解析到公网地址，除非 POC 明确要求走
    公网链路。
@@ -141,7 +122,7 @@ kubectl -n <namespace> run ws-debug --rm -it --restart=Never \\
 返回 `400`、`401` 或应用层握手错误通常说明 DNS、路由和 HTTP 已经到达 APP；如果是
 超时或名称解析失败，应先检查对等路由、私有 DNS、ELB 安全组和 NetworkPolicy。
 
-### 4. 在 Provider Profile 中填写私网 WS URL
+### 在 Provider Profile 中填写私网 WS URL
 
 完成以上入口后，将 Profile 中的 `channel.publicUrl` 填成 AgentSphere Sandbox 可解析的
 私有域名，而不是 CCE Service DNS：
@@ -169,9 +150,11 @@ Channel Plugin 随后从 AgentSphere VPC 发起 WS 连接。上线生产前应�
 部署后的通信路径如下：
 
 ```text
-Browser -> OnyxClaw Cloud APP (CCE Pod) -> AgentSphere E2B API (VPC Endpoint)
-                                            |
-                                            +-> AgentSphere Sandbox -> OnyxClaw Channel WS/WSS
+Browser -> CCE private ELB:3000 -> OnyxClaw Cloud APP (CCE Pod) -> AgentSphere E2B API (VPC Endpoint)
+                                                                  |
+                                                                  +-> AgentSphere Sandbox
+                                                                        |- CCE private ELB:80 (Channel WS)
+                                                                        `- Ollama HTTP:11434 (deepseek-r1:1.5b)
 ```
 
 开始前请确认：
@@ -184,6 +167,9 @@ Browser -> OnyxClaw Cloud APP (CCE Pod) -> AgentSphere E2B API (VPC Endpoint)
    解析 CCE 集群内部的 `*.svc.cluster.local` 域名；
 5. AgentSphere Template 已预装与 Profile 一致的 OpenClaw 和 Channel Plugin，或已
    验证所选的安装模式。
+6. AgentSphere Sandbox 能通过 HTTP 访问 Ollama 的 `<ollama-reachable-host>:11434`，且
+   该 Ollama 实例已执行 `ollama pull deepseek-r1:1.5b`。不要假设 Sandbox 能访问部署者
+   笔记本的 `localhost:11434`。
 
 ## 2. 创建 Provider Profile ConfigMap
 
@@ -231,9 +217,9 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
         "signingSecretEnv": "HUAWEICLOUD_AGENTSPHERE_CHANNEL_SIGNING_SECRET"
       },
       "model": {
-        "provider": "openai-compatible",
-        "model": "<model-id>",
-        "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_MODEL_API_KEY"
+        "provider": "ollama",
+        "model": "deepseek-r1:1.5b",
+        "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_OLLAMA_API_KEY"
       },
       "cleanupPolicy": "kill",
       "capabilities": {
@@ -259,6 +245,11 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
   的实际内容一致；
 - `channel.publicUrl` 必须从 AgentSphere Sandbox 可达。不要直接填写 CCE
   `ClusterIP` Service 的 `*.svc.cluster.local` 地址。
+- `model.apiKeyEnv` 的值应设为非空标记 `ollama-local`。这不是 Ollama 凭据，而是当前
+  Cloud APP 的配置构建流程要求的非空占位值；本地 Ollama 不校验它。
+- Ollama 地址写在 `openclaw-base-config.json`，使用原生 `http://<ollama-reachable-host>:11434`
+  API，不要加 `/v1`。对 AgentSphere Sandbox 来说，`127.0.0.1` 和 `localhost` 指向
+  Sandbox 自己，不是部署者的本机。
 
 创建 ConfigMap：
 
@@ -270,22 +261,67 @@ kubectl -n <namespace> create configmap onyxclaw-provider-config \
 
 ## 3. 创建 Secret
 
-密钥通过 Kubernetes Secret 注入。Profile 中的 `apiKeyEnv`、`model.apiKeyEnv` 和
-`channel.signingSecretEnv` 必须与下列环境变量名完全对应。
+AgentSphere API Key 和 Channel signing secret 通过 Kubernetes Secret 注入。Profile 中的
+`apiKeyEnv`、`model.apiKeyEnv` 和 `channel.signingSecretEnv` 必须与下列环境变量名完全对应。
+其中 Ollama 的 `apiKeyEnv` 只承载固定的 `ollama-local` 标记，不是模型访问密钥。
 
-准备包含 `__ONYXCLAW_MODEL_API_KEY__` 占位符的 `openclaw-base-config.json`，然后：
+准备以下 `openclaw-base-config.json`。将 `<ollama-reachable-host>` 替换为 AgentSphere
+Sandbox 可以通过 VPC、专线或受控隧道访问的 Ollama 主机名/IP；该地址不能是本机
+`localhost`。Ollama 原生 API 只使用 HTTP，`baseUrl` 不带 `/v1`：
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/deepseek-r1:1.5b"
+      },
+      "workspace": "/home/node/.openclaw/workspace"
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://<ollama-reachable-host>:11434",
+        "apiKey": "__ONYXCLAW_MODEL_API_KEY__",
+        "api": "ollama",
+        "timeoutSeconds": 300,
+        "models": [
+          {
+            "id": "deepseek-r1:1.5b",
+            "name": "deepseek-r1:1.5b"
+          }
+        ]
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "<replace-with-a-random-gateway-token>"
+    }
+  }
+}
+```
+
+尽管 Ollama 不校验 API key，当前 APP 会要求基础配置包含
+`__ONYXCLAW_MODEL_API_KEY__` 并要求对应环境变量非空。因此下面注入固定文本
+`ollama-local`；它不是凭据，也不会被本地 Ollama 校验：
 
 ```bash
 kubectl -n <namespace> create secret generic onyxclaw-app-secrets \
   --from-literal=agentsphere-e2b-api-key='<AGENTSPHERE_E2B_API_KEY>' \
-  --from-literal=model-api-key='<MODEL_API_KEY>' \
+  --from-literal=ollama-api-key-marker='ollama-local' \
   --from-literal=channel-signing-secret='<RANDOM_CHANNEL_SIGNING_SECRET>' \
   --from-file=openclaw-base-config-json=./openclaw-base-config.json \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-不要把上述 Secret 写入 ConfigMap、Deployment YAML、终端历史记录或 Git 仓库。
-生产环境应优先使用 CCE 支持的 Secret 管理或密钥同步机制。
+不要把 AgentSphere API Key、Channel signing secret 或 Gateway token 写入 ConfigMap、
+Deployment YAML、终端历史记录或 Git 仓库。`ollama-local` 本身不是 Secret；为兼容现有
+APP 的统一注入机制才与其他值一起写入此 Secret。
 
 ## 4. 修改 Cloud APP Deployment
 
@@ -309,11 +345,11 @@ spec:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
                   key: agentsphere-e2b-api-key
-            - name: HUAWEICLOUD_AGENTSPHERE_MODEL_API_KEY
+            - name: HUAWEICLOUD_AGENTSPHERE_OLLAMA_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
-                  key: model-api-key
+                  key: ollama-api-key-marker
             - name: HUAWEICLOUD_AGENTSPHERE_CHANNEL_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
@@ -395,6 +431,16 @@ kubectl -n <namespace> exec deploy/onyxclaw-app -- \
 `statusCode`、`requestId` 和脱敏后的 `E2B_BRIDGE_OPERATION_FAILED` 信息，交由
 AgentSphere 团队核对 API Key、E2B 版本兼容性和 Template 权限。
 
+Ollama 连通性必须从 AgentSphere Sandbox 的网络视角验证，而不是只在部署者本机执行。
+请由 AgentSphere 团队在一个测试 Sandbox 中运行：
+
+```bash
+curl -fsS http://<ollama-reachable-host>:11434/api/tags
+```
+
+响应中应包含 `deepseek-r1:1.5b`。若失败，检查 Ollama 的监听地址、主机防火墙、VPC/专线
+路由和安全组；若地址使用了 `/v1`，请改回原生 Ollama 根地址。
+
 ## 6. 常见问题
 
 | 现象 | 原因 | 处理方式 |
@@ -405,6 +451,7 @@ AgentSphere 团队核对 API Key、E2B 版本兼容性和 Template 权限。
 | Profile 校验拒绝 HTTP | 私网声明不完整 | 设置 `api.privateNetworkOnly: true` 和 `capabilities.vpc: true`，或改用 HTTPS |
 | Sandbox 创建成功但 Gateway 不在线 | Channel URL 对 Sandbox 不可达 | 使用 Sandbox 可访问的 WS/WSS 私网 ELB 入口，并检查 DNS、路由（WSS 还要检查 TLS） |
 | Files/Commands 连不上 | 残留 `E2B_ROUTE_DOMAIN` | 删除 ACS 专用变量，除非服务方要求专用路由 |
+| OpenClaw 无法调用 Ollama | Sandbox 无法访问本地模型地址，或 `baseUrl` 使用了 `/v1` | 使用 Sandbox 可达的 `http://<ollama-reachable-host>:11434`，验证 `/api/tags`，并保留 `api: "ollama"` |
 
 更多 Provider 字段说明见 [Provider 配置管理](./provider-config.md)，E2B 兼容接入的
 通用验收流程见 [云厂商 Sandbox Provider 对接操作指南](./cloud-sandbox-provider-onboarding.md)。
