@@ -173,9 +173,8 @@ Browser -> CCE private ELB:3000 -> OnyxClaw Cloud APP (CCE Pod) -> AgentSphere E
 
 ## 2. 创建 Provider Profile ConfigMap
 
-Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 ACS Profile。
-该 Profile 指向 ACS 的 `sandbox-system.svc.cluster.local`，在 CCE 中无法解析。因此
-必须挂载新的 Profile，并显式选择 `huaweicloud-agentsphere` Provider。
+Cloud APP 默认读取镜像内的 AgentSphere 示例 Profile。正式部署仍应挂载环境专用
+Profile，并显式选择 `huaweicloud-agentsphere` Provider。
 
 保存以下文件为 `providers.agentsphere.json`。此文件只能包含非敏感配置，不能包含
 任何 API Key。
@@ -193,7 +192,6 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
         "privateNetworkOnly": true,
         "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY",
         "compatibilityVersion": "agentsphere-e2b-poc",
-        "sdkPatch": "none",
         "requestTimeoutMs": 30000
       },
       "sandbox": {
@@ -219,7 +217,7 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
       "model": {
         "provider": "ollama",
         "model": "deepseek-r1:1.5b",
-        "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_OLLAMA_API_KEY"
+        "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_MODEL_API_KEY"
       },
       "cleanupPolicy": "kill",
       "capabilities": {
@@ -239,8 +237,6 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
   仍可保留，用于声明网络边界；
 - 仅当服务方明确只提供私网 HTTP 时，才改为 `http://`。此时必须同时设置
   `api.privateNetworkOnly: true` 和 `capabilities.vpc: true`；
-- 标准 E2B 兼容服务必须使用 `sdkPatch: "none"`。不要使用
-  `kruise-agents-private-protocol`，它仅适用于阿里云 ACS；
 - `defaultUser`、OpenClaw binary、路径和插件安装模式必须与 AgentSphere Template
   的实际内容一致；
 - `channel.publicUrl` 必须从 AgentSphere Sandbox 可达。不要直接填写 CCE
@@ -313,7 +309,7 @@ Sandbox 可以通过 VPC、专线或受控隧道访问的 Ollama 主机名/IP；
 ```bash
 kubectl -n <namespace> create secret generic onyxclaw-app-secrets \
   --from-literal=agentsphere-e2b-api-key='<AGENTSPHERE_E2B_API_KEY>' \
-  --from-literal=ollama-api-key-marker='ollama-local' \
+  --from-literal=model-api-key='ollama-local' \
   --from-literal=channel-signing-secret='<RANDOM_CHANNEL_SIGNING_SECRET>' \
   --from-file=openclaw-base-config-json=./openclaw-base-config.json \
   --dry-run=client -o yaml | kubectl apply -f -
@@ -345,11 +341,11 @@ spec:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
                   key: agentsphere-e2b-api-key
-            - name: HUAWEICLOUD_AGENTSPHERE_OLLAMA_API_KEY
+            - name: HUAWEICLOUD_AGENTSPHERE_MODEL_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
-                  key: ollama-api-key-marker
+                  key: model-api-key
             - name: HUAWEICLOUD_AGENTSPHERE_CHANNEL_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
@@ -370,16 +366,6 @@ spec:
           configMap:
             name: onyxclaw-provider-config
 ```
-
-不要从 ACS Deployment 模板复制下列配置到 AgentSphere 部署：
-
-```yaml
-- name: E2B_ROUTE_DOMAIN
-  value: sandbox-gateway.sandbox-system.svc.cluster.local:7788
-```
-
-这是 ACS 私有路由的专用变量。除非 AgentSphere 服务方明确提供等价的 Sandbox 路由域名，
-否则不要设置它。
 
 应用变更并等待滚动完成：
 
@@ -406,7 +392,7 @@ curl -fsS http://127.0.0.1:3000/api/ui-config
 }
 ```
 
-若仍返回 `alicloud-acs`，说明 ConfigMap 挂载路径、`ONYXCLAW_PROVIDER_CONFIG` 或
+若没有返回该 Provider ID，说明 ConfigMap 挂载路径、`ONYXCLAW_PROVIDER_CONFIG` 或
 `ONYXCLAW_PROVIDER` 尚未生效。
 
 再从 APP Pod 内验证 DNS。以下检查不输出密钥：
@@ -445,13 +431,11 @@ curl -fsS http://<ollama-reachable-host>:11434/api/tags
 
 | 现象 | 原因 | 处理方式 |
 | --- | --- | --- |
-| `providerId` 为 `alicloud-acs` | 使用了镜像默认 Profile | 挂载 Profile 并设置两个 `ONYXCLAW_PROVIDER*` 环境变量 |
-| `[Errno -2] Name or service not known` | Endpoint DNS 不可解析，或仍使用 ACS `.svc` 地址 | 检查私有 DNS、VPCE 和 `api.baseUrl` |
+| `providerId` 不正确 | Profile 选择或挂载未生效 | 挂载 Profile 并设置两个 `ONYXCLAW_PROVIDER*` 环境变量 |
+| `[Errno -2] Name or service not known` | Endpoint DNS 不可解析 | 检查私有 DNS、VPCE 和 `api.baseUrl` |
 | 启动即报 `missing provider secrets` | Profile 引用的环境变量未注入 | 核对 Profile 的 `*Env` 字段和 Secret `env` 映射 |
 | Profile 校验拒绝 HTTP | 私网声明不完整 | 设置 `api.privateNetworkOnly: true` 和 `capabilities.vpc: true`，或改用 HTTPS |
 | Sandbox 创建成功但 Gateway 不在线 | Channel URL 对 Sandbox 不可达 | 使用 Sandbox 可访问的 WS/WSS 私网 ELB 入口，并检查 DNS、路由（WSS 还要检查 TLS） |
-| Files/Commands 连不上 | 残留 `E2B_ROUTE_DOMAIN` | 删除 ACS 专用变量，除非服务方要求专用路由 |
 | OpenClaw 无法调用 Ollama | Sandbox 无法访问本地模型地址，或 `baseUrl` 使用了 `/v1` | 使用 Sandbox 可达的 `http://<ollama-reachable-host>:11434`，验证 `/api/tags`，并保留 `api: "ollama"` |
 
-更多 Provider 字段说明见 [Provider 配置管理](./provider-config.md)，E2B 兼容接入的
-通用验收流程见 [云厂商 Sandbox Provider 对接操作指南](./cloud-sandbox-provider-onboarding.md)。
+更多 Provider 字段说明见 [Provider 配置管理](./provider-config.md)。

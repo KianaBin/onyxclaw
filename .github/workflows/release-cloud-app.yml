@@ -52,7 +52,8 @@ jobs:
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
-          file: deploy/alicloud-app/Dockerfile
+          file: deploy/cloud-app/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.release.outputs.image_ref }}
           cache-from: type=gha
@@ -78,7 +79,7 @@ jobs:
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
-          file: deploy/alicloud-app/Dockerfile
+          file: deploy/cloud-app/Dockerfile
           load: true
           tags: onyxclaw-app:archive-build
           outputs: type=docker,dest=/tmp/${{ steps.release.outputs.artifact }}.tar

@@ -2,7 +2,7 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "acs-model/example-chat"
+        "primary": "cloud-model/example-chat"
       },
       "workspace": "/home/node/.openclaw/workspace"
     }
@@ -10,7 +10,7 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "acs-model": {
+      "cloud-model": {
         "baseUrl": "https://model-api.example.com/v1",
         "apiKey": "example-model-api-key-injected-at-runtime",
         "api": "openai-completions",
@@ -45,7 +45,7 @@
   "channels": {
     "onyxclaw": {
       "enabled": true,
-      "platformUrl": "ws://onyxclaw-app.default.svc.cluster.local:18890",
+      "platformUrl": "wss://replace-with-channel-domain/connect",
       "instanceId": "example-runtime-instance-id",
       "bootstrapToken": "example-one-time-bootstrap-token"
     }

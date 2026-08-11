@@ -75,4 +75,4 @@ OpenClaw 可能存在以下两种部署形态：
 - 客户端形态和系统架构选型；
 - 安全、网络、状态管理和异常恢复方案。
 
-方案记录在 `docs/proposal.md`，评审通过后再启动开发。
+后续方案和验证结果持续记录在 `docs/huaweicloud-cce-learning-log.md`。

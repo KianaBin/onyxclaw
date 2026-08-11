@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: onyxclaw-app
-  namespace: default
+  namespace: {{NAMESPACE}}
 spec:
   replicas: 1
   selector:
@@ -12,37 +12,29 @@ spec:
     metadata:
       labels:
         app: onyxclaw-app
-        alibabacloud.com/acs: "true"
     spec:
-      automountServiceAccountToken: false
-      imagePullSecrets:
-        - name: onyxclaw-acr-pull
       containers:
         - name: app
           image: {{IMAGE}}
           imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 3000
-            - name: channel
-              containerPort: 18890
           env:
-            # Manager returns an agents-vpc.infra route that is not resolvable
-            # from an ACS workload. Route envd traffic through the in-cluster
-            # Sandbox Gateway while retaining the claimed Sandbox credentials.
-            - name: E2B_ROUTE_DOMAIN
-              value: sandbox-gateway.sandbox-system.svc.cluster.local:7788
-            - name: ALICLOUD_ACS_E2B_API_KEY
+            - name: ONYXCLAW_PROVIDER
+              value: huaweicloud-agentsphere
+            - name: ONYXCLAW_PROVIDER_CONFIG
+              value: /app/runtime-config/providers.agentsphere.json
+            - name: ONYXCLAW_CLOUD_REGION
+              value: {{REGION}}
+            - name: HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
                   key: e2b-api-key
-            - name: ALICLOUD_ACS_MODEL_API_KEY
+            - name: HUAWEICLOUD_AGENTSPHERE_MODEL_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
                   key: model-api-key
-            - name: ALICLOUD_ACS_CHANNEL_SIGNING_SECRET
+            - name: HUAWEICLOUD_AGENTSPHERE_CHANNEL_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
@@ -52,31 +44,32 @@ spec:
                 secretKeyRef:
                   name: onyxclaw-app-secrets
                   key: openclaw-base-config-json
+          ports:
+            - name: http
+              containerPort: 3000
+            - name: channel
+              containerPort: 18890
           readinessProbe:
             httpGet:
               path: /api/status
               port: http
             initialDelaySeconds: 3
-            periodSeconds: 5
-          resources:
-            requests:
-              cpu: 250m
-              memory: 256Mi
-            limits:
-              cpu: "1"
-              memory: 1Gi
-          securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            runAsUser: 1000
-            capabilities:
-              drop: ["ALL"]
+            periodSeconds: 10
+          volumeMounts:
+            - name: provider-config
+              mountPath: /app/runtime-config/providers.agentsphere.json
+              subPath: providers.agentsphere.json
+              readOnly: true
+      volumes:
+        - name: provider-config
+          configMap:
+            name: onyxclaw-provider-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: onyxclaw-app
-  namespace: default
+  namespace: {{NAMESPACE}}
 spec:
   selector:
     app: onyxclaw-app

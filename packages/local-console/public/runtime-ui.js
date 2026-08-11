@@ -6,7 +6,7 @@ export function runtimePresentation(config = {}) {
       modeCopy: "连接这台 Mac 上的 OpenClaw，创建一只拥有专属性格的智能龙虾。",
     };
   }
-  const providerLabel = config.providerName?.toUpperCase().replace(" AGENT SANDBOX", "") ||
+  const providerLabel = config.providerName?.toUpperCase().replace(/(?: AGENT)? SANDBOX$/, "") ||
     config.providerId?.toUpperCase() || "CLOUD SANDBOX";
   return {
     environmentLabel: `${providerLabel} · CLOUD`,
@@ -42,5 +42,3 @@ export function cloudProviderPresentation(config = {}) {
     capabilities,
   };
 }
-
-export const acsClusterPresentation = cloudProviderPresentation;

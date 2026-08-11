@@ -2,7 +2,7 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "acs-model/example-chat"
+        "primary": "cloud-model/example-chat"
       },
       "workspace": "/home/node/.openclaw/workspace"
     }
@@ -10,7 +10,7 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "acs-model": {
+      "cloud-model": {
         "baseUrl": "https://model-api.example.com/v1",
         "apiKey": "__ONYXCLAW_MODEL_API_KEY__",
         "api": "openai-completions",

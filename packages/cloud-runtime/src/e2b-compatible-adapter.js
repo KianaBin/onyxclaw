@@ -90,7 +90,6 @@ export class E2BCompatibleAdapter {
       apiKey: secrets.apiKey,
       baseUrl: provider.api.baseUrl,
       requestTimeoutMs: provider.api.requestTimeoutMs,
-      sdkPatch: provider.api.sdkPatch ?? "none",
     });
   }
 
@@ -274,8 +273,3 @@ export function createE2BCompatibleAdapter({
     logger,
   });
 }
-
-// Compatibility aliases for existing integrations. New code should use the
-// provider-neutral names above.
-export const AlibabaAcsAdapter = E2BCompatibleAdapter;
-export const createAlibabaAcsAdapter = createE2BCompatibleAdapter;

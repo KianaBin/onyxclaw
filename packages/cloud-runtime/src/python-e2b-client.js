@@ -160,7 +160,7 @@ export function createPythonE2BClientFactory({
   spawnImpl = spawn,
   logger = defaultLogger,
 } = {}) {
-  return ({ apiKey, baseUrl, requestTimeoutMs, sdkPatch = "none" }) => {
+  return ({ apiKey, baseUrl, requestTimeoutMs }) => {
     const bridge = new PythonBridge({
       pythonPath,
       bridgePath,
@@ -171,7 +171,6 @@ export function createPythonE2BClientFactory({
         ...process.env,
         E2B_API_KEY: apiKey,
         E2B_BASE_URL: baseUrl,
-        E2B_SDK_PATCH: sdkPatch,
       },
     });
     return {

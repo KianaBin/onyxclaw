@@ -1,14 +1,12 @@
 node_modules/
-.terraform/
-*.tfstate
-*.tfstate.*
-iac/alicloud-acs/generated/
-iac/alicloud-acs/*.tfvars
+__pycache__/
+*.pyc
 artifacts/
 .env
 .env.*
 !.env.example
 config/providers.local.json
+config/providers.agentsphere.local.json
 *.log
 *.swp
 .DS_Store

@@ -89,12 +89,12 @@ test("UI config exposes safe runtime identity without provider secrets", async (
     port: 0,
     uiConfig: {
       deploymentMode: "cloud",
-      providerId: "alicloud-acs",
-      providerName: "Alibaba Cloud ACS Agent Sandbox",
-      region: "cn-hangzhou",
-      templateId: "onyxclaw",
+      providerId: "huaweicloud-agentsphere",
+      providerName: "Huawei Cloud AgentSphere Sandbox",
+      region: "cn-southwest-301",
+      templateId: "agentsphere-onyxclaw",
       gatewayPort: 18789,
-      e2bHost: "sandbox-manager.sandbox-system.svc.cluster.local:7788",
+      e2bHost: "sandbox-service-internel.cn-southwest-301.beta.myhuaweicloud.com",
       protocol: "e2b-compatible",
       capabilities: {
         pauseResume: true,
@@ -111,12 +111,12 @@ test("UI config exposes safe runtime identity without provider secrets", async (
 
   assert.deepEqual(config, {
     deploymentMode: "cloud",
-    providerId: "alicloud-acs",
-    providerName: "Alibaba Cloud ACS Agent Sandbox",
-    region: "cn-hangzhou",
-    templateId: "onyxclaw",
+    providerId: "huaweicloud-agentsphere",
+    providerName: "Huawei Cloud AgentSphere Sandbox",
+    region: "cn-southwest-301",
+    templateId: "agentsphere-onyxclaw",
     gatewayPort: 18789,
-    e2bHost: "sandbox-manager.sandbox-system.svc.cluster.local:7788",
+    e2bHost: "sandbox-service-internel.cn-southwest-301.beta.myhuaweicloud.com",
     protocol: "e2b-compatible",
     capabilities: {
       pauseResume: true,
@@ -304,7 +304,7 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.match(styles, /\.phone-frame\s*\{[^}]*max-width:\s*100%/);
   // service-workbench is a 2-row layout; top row is the parallel architecture + objects
   assert.match(styles, /\.service-workbench\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1\.05fr\)/);
-  // After removing the ACS CLUSTER card the two remaining cards sit
+  // The two remaining cards sit
   // side-by-side as equal columns.
   assert.match(styles, /\.observability-top\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
   assert.doesNotMatch(styles, /\.cloud-entry/);

@@ -7,9 +7,9 @@ RUN apt-get update \
     && python3 -m venv /opt/venv
 
 WORKDIR /app
-COPY iac/alicloud-acs/smoke-requirements.txt /tmp/smoke-requirements.txt
-RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/smoke-requirements.txt \
-    && rm /tmp/smoke-requirements.txt
+COPY deploy/cloud-app/requirements.txt /tmp/requirements.txt
+RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts

@@ -14,18 +14,10 @@ if base_url.scheme not in ("http", "https") or not base_url.netloc:
     raise RuntimeError("E2B_BASE_URL must be an HTTP(S) URL")
 os.environ["E2B_DOMAIN"] = base_url.netloc
 
-sdk_patch = os.environ.get("E2B_SDK_PATCH", "none")
-if sdk_patch == "kruise-agents-private-protocol":
-    from kruise_agents.patch_e2b import patch_e2b
-
-    patch_e2b(https=base_url.scheme == "https")
-elif sdk_patch != "none":
-    raise RuntimeError(f"unsupported E2B_SDK_PATCH: {sdk_patch}")
 from e2b import Sandbox
 
 
 api_key = os.environ["E2B_API_KEY"]
-route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
 
 
@@ -57,23 +49,10 @@ def safe_error(error):
     return detail
 
 
-def routed(session):
-    if not route_domain:
-        return session
-    return Sandbox(
-        sandbox_id=session.sandbox_id,
-        sandbox_domain=route_domain,
-        connection_config=session.connection_config,
-        envd_version=session._envd_version,
-        envd_access_token=session._envd_access_token,
-        traffic_access_token=session.traffic_access_token,
-    )
-
-
 def connect_session(sandbox_id):
     if sandbox_id not in sessions:
         claimed = Sandbox.connect(sandbox_id, api_key=api_key)
-        sessions[sandbox_id] = (claimed, routed(claimed))
+        sessions[sandbox_id] = claimed
     return sessions[sandbox_id]
 
 
@@ -87,11 +66,11 @@ def dispatch(op, params):
             secure=params.get("secure", True),
             api_key=api_key,
         )
-        sessions[claimed.sandbox_id] = (claimed, routed(claimed))
+        sessions[claimed.sandbox_id] = claimed
         return {"sandboxId": claimed.sandbox_id}
 
     sandbox_id = params["sandboxId"]
-    claimed, session = connect_session(sandbox_id)
+    session = connect_session(sandbox_id)
     if op == "connect":
         return {"sandboxId": sandbox_id}
     if op == "command":
@@ -114,7 +93,7 @@ def dispatch(op, params):
         content = session.files.read(params["path"], user=params.get("user"))
         return {"content": content}
     if op == "kill":
-        claimed.kill()
+        session.kill()
         sessions.pop(sandbox_id, None)
         return {"killed": True}
     raise ValueError("unsupported bridge operation")

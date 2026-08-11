@@ -5,7 +5,6 @@ const cleanupPolicies = new Set(["pause", "kill", "keep-running"]);
 const timeoutPolicies = new Set(["pause", "kill"]);
 const installModes = new Set(["preinstalled", "install-at-runtime"]);
 const pluginInstallModes = new Set(["upload-package", "preinstalled"]);
-const sdkPatches = new Set(["none", "kruise-agents-private-protocol"]);
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -85,12 +84,6 @@ function validateProvider(id, provider) {
     { allowPrivateInsecure: vpcPrivateApi },
   );
   positiveInteger(provider?.api?.requestTimeoutMs, `${id}.api.requestTimeoutMs`, errors);
-  if (!sdkPatches.has(provider?.api?.sdkPatch ?? "none")) {
-    errors.push(
-      `${id}.api.sdkPatch must be none or kruise-agents-private-protocol`,
-    );
-  }
-
   requiredString(provider?.sandbox?.templateId, `${id}.sandbox.templateId`, errors);
   positiveInteger(provider?.sandbox?.timeoutMs, `${id}.sandbox.timeoutMs`, errors);
   if (!timeoutPolicies.has(provider?.sandbox?.onTimeout)) {

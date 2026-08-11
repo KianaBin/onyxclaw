@@ -86,7 +86,6 @@ test("maps provider configuration into an E2B-compatible client", async () => {
     apiKey: "runtime-secret",
     baseUrl: "http://127.0.0.1:18081",
     requestTimeoutMs: 30_000,
-    sdkPatch: "none",
   }]);
   assert.deepEqual(calls[1], ["create", {
     template: "onyxclaw",
@@ -169,7 +168,7 @@ test("wraps provider failures with a stage and redacts secrets", async () => {
     assert.equal(error.code, "CLOUD_RUNTIME_CREATE_FAILED");
     assert.equal(error.statusCode, 401);
     assert.equal(error.requestId, "request-123");
-    assert.doesNotMatch(error.message, /Alibaba|ACS/);
+    assert.doesNotMatch(error.message, /runtime-secret-value/);
     assert.doesNotMatch(error.message, new RegExp(secret));
     assert.match(error.message, /\[REDACTED\]/);
     return true;

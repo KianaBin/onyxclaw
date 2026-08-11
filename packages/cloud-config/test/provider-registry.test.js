@@ -122,16 +122,6 @@ test("rejects unsafe endpoints and invalid sandbox paths", async (t) => {
   );
 });
 
-test("rejects unknown provider-specific SDK patches", async (t) => {
-  const config = validConfig();
-  config.providers["vendor-a"].api.sdkPatch = "another-vendor-patch";
-
-  await assert.rejects(
-    fixture(t, config),
-    /api\.sdkPatch must be none or kruise-agents-private-protocol/,
-  );
-});
-
 test("allows insecure endpoints only when explicitly restricted to a VPC", async (t) => {
   const config = validConfig();
   const selected = config.providers["vendor-a"];
@@ -181,23 +171,24 @@ test("committed provider example remains valid and references external secrets",
   assert.equal(registry.getSecrets().channelSigningSecret, "test-only");
 });
 
-test("committed Alibaba ACS provider uses private endpoints and node paths", async () => {
+test("committed AgentSphere provider uses the confirmed API endpoint and node paths", async () => {
   const repositoryRoot = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "../../..",
   );
   const registry = await loadProviderRegistry({
-    configPath: path.join(repositoryRoot, "config", "providers.alicloud.example.json"),
+    configPath: path.join(repositoryRoot, "config", "providers.agentsphere.example.json"),
     env: {
-      ALICLOUD_ACS_E2B_API_KEY: "test-only",
-      ALICLOUD_ACS_MODEL_API_KEY: "test-only",
-      ALICLOUD_ACS_CHANNEL_SIGNING_SECRET: "test-only",
+      HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY: "test-only",
+      HUAWEICLOUD_AGENTSPHERE_MODEL_API_KEY: "test-only",
+      HUAWEICLOUD_AGENTSPHERE_CHANNEL_SIGNING_SECRET: "test-only",
     },
   });
-  const provider = registry.getProvider("alicloud-acs");
+  const provider = registry.getProvider("huaweicloud-agentsphere");
 
   assert.equal(provider.api.privateNetworkOnly, true);
-  assert.equal(provider.sandbox.templateId, "onyxclaw");
+  assert.match(provider.api.baseUrl, /sandbox-service-internel/);
+  assert.equal(provider.sandbox.templateId, "replace-with-agentsphere-template-id");
   assert.equal(provider.sandbox.defaultUser, "node");
   assert.equal(provider.sandbox.workspaceDir, "/home/node/.openclaw/workspace");
   assert.equal(provider.openclaw.pluginInstallMode, "preinstalled");

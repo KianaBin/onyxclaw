@@ -49,9 +49,8 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   });
   const client = factory({
     apiKey: "runtime-secret",
-    baseUrl: "http://sandbox-manager.sandbox-system.svc.cluster.local:7788",
+    baseUrl: "https://sandbox-service-internel.cn-southwest-301.beta.myhuaweicloud.com",
     requestTimeoutMs: 30_000,
-    sdkPatch: "kruise-agents-private-protocol",
   });
   const session = await client.create({ template: "onyxclaw", timeoutSeconds: 300 });
 
@@ -69,11 +68,8 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   assert.equal(fake.calls[0].command, "/venv/bin/python");
   assert.deepEqual(fake.calls[0].args, ["/app/e2b-bridge.py"]);
   assert.equal(fake.calls[0].options.env.E2B_API_KEY, "runtime-secret");
-  assert.equal(fake.calls[0].options.env.E2B_BASE_URL, "http://sandbox-manager.sandbox-system.svc.cluster.local:7788");
-  assert.equal(
-    fake.calls[0].options.env.E2B_SDK_PATCH,
-    "kruise-agents-private-protocol",
-  );
+  assert.equal(fake.calls[0].options.env.E2B_BASE_URL, "https://sandbox-service-internel.cn-southwest-301.beta.myhuaweicloud.com");
+  assert.equal(fake.calls[0].options.env.E2B_SDK_PATCH, undefined);
   assert.doesNotMatch(JSON.stringify(fake.requests), /runtime-secret/);
   assert.deepEqual(fake.requests.map(({ op }) => op), [
     "create",
@@ -132,13 +128,13 @@ test("surfaces detailed bridge errors and logs redacted bridge stderr", async ()
   assert.doesNotMatch(JSON.stringify(logs), /runtime-secret/);
 });
 
-test("Python bridge applies the provider patch before E2B import and returns safe errors", async () => {
+test("Python bridge uses the base E2B SDK and returns safe errors", async () => {
   const source = await readFile(
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/e2b-bridge.py"),
     "utf8",
   );
-  assert.ok(source.indexOf("sdk_patch ==") < source.indexOf("from e2b import Sandbox"));
-  assert.ok(source.indexOf("patch_e2b(") < source.indexOf("from e2b import Sandbox"));
+  assert.match(source, /from e2b import Sandbox/);
+  assert.doesNotMatch(source, /kruise_agents|patch_e2b|E2B_SDK_PATCH/);
   assert.match(source, /"create"|op == "create"/);
   assert.match(source, /"connect"|op == "connect"/);
   assert.match(source, /"command"|op == "command"/);
