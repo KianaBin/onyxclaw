@@ -218,6 +218,32 @@ Sandbox。
 当前华为云控制台登录会话已过期。重新登录后，应在该 Sandbox 的事件/日志中继续检查
 Gateway `status=400` 的服务端原因，并读取 Channel 记录的 DeepSeek 原始异常。
 
+### E2B Files/Commands 配置诊断
+
+诊断脚本保存在
+[`deploy/huaweicloud-cce/diagnose_openclaw_sandbox.py`](../deploy/huaweicloud-cce/diagnose_openclaw_sandbox.py)，
+节点副本位于 `/home/hzp/diagnose_openclaw_sandbox.py`。脚本使用 E2B SDK 创建短生命周期
+Sandbox，以 create 响应中的 traffic token 调用 Files 和 Commands，并在结束时清理测试
+Sandbox。API Key 和模型 Key 只从 APP Pod 环境读取，输出会脱敏。
+
+针对 Template `c4711224-04d5-4875-a934-47a4007db35e` 的实测结果：
+
+- Files API 写入并读回 `/home/node/.openclaw/openclaw.json`，内容与 APP 生成值完全一致；
+- `node /app/openclaw.mjs config validate` 返回 `Config valid`；
+- 默认模型和解析后模型均为 `deepseek/deepseek-v4-flash`；
+- `models status --probe --probe-provider deepseek` 返回 `status=ok`，两次模型探测延迟分别约
+  `2467ms` 和 `1920ms`；
+- `node` 用户为 UID/GID `1000:1000`，但 SFS workspace 根目录是 `root:root 0755`，
+  `test -w` 返回 false；
+- 实际本地 agent 回合失败为
+  `EACCES: permission denied, open '/home/node/.openclaw/workspace/AGENTS.md'`。
+
+因此当前问候/对话失败不是 `openclaw.json`、DeepSeek 模型名、API Key 或公网模型访问问题，
+而是 SFS Turbo 共享目录权限问题。修复时应把 SFS 上 `/hzp/workspace` 的属主设置为
+UID/GID `1000:1000` 并赋予 owner 写权限，或在挂载初始化阶段用等效方式处理。修改共享
+目录权限会影响所有挂载该路径的 Sandbox，执行前需确认现有文件的权限策略和 SFS 是否启用
+root squash。
+
 当前 Channel ELB 没有配置 TLS，因此本次验证协议是私网 `ws://`，不是 `wss://`。
 若正式要求 WSS，需要为 ELB/网关配置可被 Sandbox 信任的域名证书，将
 `channel.publicUrl` 改为 `wss://<domain>/connect` 后再做一次握手验证。
