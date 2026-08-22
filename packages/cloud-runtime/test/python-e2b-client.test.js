@@ -26,6 +26,7 @@ function fakeSpawner() {
           command: { exitCode: 0, stdout: "ok", stderr: "" },
           writeFile: { written: true },
           readFile: { content: "hello" },
+          pause: { paused: true },
           kill: { killed: true },
         };
         queueMicrotask(() => {
@@ -64,6 +65,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   });
   await session.writeFile("/tmp/test", "hello", { user: "node" });
   assert.equal(await session.readFile("/tmp/test", { user: "node" }), "hello");
+  await session.pause();
   await session.kill();
 
   assert.equal(fake.calls.length, 1);
@@ -85,6 +87,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
     "command",
     "writeFile",
     "readFile",
+    "pause",
     "kill",
   ]);
 });
@@ -155,6 +158,8 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /"writeFile"|op == "writeFile"/);
   assert.match(source, /"readFile"|op == "readFile"/);
   assert.match(source, /"kill"|op == "kill"/);
+  assert.match(source, /"pause"|op == "pause"/);
+  assert.match(source, /on_timeout/);
   assert.match(source, /"statusCode"/);
   assert.match(source, /"requestId"/);
   assert.doesNotMatch(source, /print\([^\n]*(E2B_API_KEY|api_key)/);

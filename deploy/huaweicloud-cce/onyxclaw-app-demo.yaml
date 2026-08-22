@@ -29,13 +29,16 @@ data:
             "requestTimeoutMs": 30000
           },
           "sandbox": {
-            "templateId": "b42d35f0-3b55-4857-8a28-be2543808932",
+            "templateId": "4b437fde-0069-4738-a11b-c264c49b57a3",
             "timeoutMs": 600000,
-            "onTimeout": "kill",
+            "onTimeout": "pause",
             "secure": true,
             "defaultUser": "node",
             "homeDir": "/home/node",
-            "workspaceDir": "/home/node/.openclaw/workspace"
+            "workspaceDir": "/home/node/.openclaw/workspace",
+            "metadata": {
+              "agentsandbox.storage.sfs": "{\"sfsTurboMounts\":[{\"sfsTurboId\":\"d38073b5-7002-4279-ab54-32faff2a0132\",\"sharePath\":\"/hzp/workspace\",\"readOnly\":false,\"mountDir\":\"/home/node/.openclaw/workspace\"}]}"
+            }
           },
           "openclaw": {
             "binary": "node /app/openclaw.mjs",
@@ -56,8 +59,8 @@ data:
           },
           "cleanupPolicy": "kill",
           "capabilities": {
-            "pauseResume": false,
-            "memoryPersistence": false,
+            "pauseResume": true,
+            "memoryPersistence": true,
             "publicEgress": false,
             "vpc": true
           }
@@ -85,12 +88,12 @@ spec:
         app.kubernetes.io/name: onyxclaw-app
         app.kubernetes.io/version: "0.3.8"
       annotations:
-        onyxclaw.io/config-revision: "2026-08-22-e2b-traffic-token"
+        onyxclaw.io/config-revision: "2026-08-22-sfs-lifecycle-template-4b437fde"
     spec:
       automountServiceAccountToken: false
       containers:
         - name: app
-          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-e2b-traffic-token@sha256:042c6416d5654fe42d743594449abdcf4f67733192f5b817aac67bcfe55bbc6d
+          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-sfs-lifecycle@sha256:7f1a7d5dd716f8b499da45457a097e05d253af1f03dd921f0689ad8db550ba8b
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

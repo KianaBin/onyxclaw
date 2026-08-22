@@ -104,8 +104,8 @@ def routed(session):
     )
 
 
-def connect_session(sandbox_id):
-    if sandbox_id not in sessions:
+def connect_session(sandbox_id, refresh=False):
+    if refresh or sandbox_id not in sessions:
         claimed = Sandbox.connect(sandbox_id, **api_options())
         sessions[sandbox_id] = (claimed, routed(claimed))
     return sessions[sandbox_id]
@@ -119,15 +119,17 @@ def dispatch(op, params):
             metadata=params.get("metadata"),
             envs=params.get("envs"),
             secure=params.get("secure", True),
+            lifecycle={"on_timeout": params.get("onTimeout", "kill")},
             **api_options(),
         )
         sessions[claimed.sandbox_id] = (claimed, routed(claimed))
         return {"sandboxId": claimed.sandbox_id}
 
     sandbox_id = params["sandboxId"]
-    claimed, session = connect_session(sandbox_id)
     if op == "connect":
+        claimed, session = connect_session(sandbox_id, refresh=True)
         return {"sandboxId": sandbox_id}
+    claimed, session = connect_session(sandbox_id)
     if op == "command":
         result = session.commands.run(
             params["command"],
@@ -151,6 +153,10 @@ def dispatch(op, params):
         claimed.kill()
         sessions.pop(sandbox_id, None)
         return {"killed": True}
+    if op == "pause":
+        claimed.pause()
+        sessions.pop(sandbox_id, None)
+        return {"paused": True}
     raise ValueError("unsupported bridge operation")
 
 

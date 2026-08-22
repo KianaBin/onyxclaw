@@ -151,6 +151,9 @@ function sessionFor(bridge, sandboxId) {
     kill() {
       return bridge.request("kill", { sandboxId });
     },
+    pause() {
+      return bridge.request("pause", { sandboxId });
+    },
   };
 }
 

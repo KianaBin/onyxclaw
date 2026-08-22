@@ -107,6 +107,16 @@ function validateProvider(id, provider) {
     errors.push(`${id}.sandbox.onTimeout must be pause or kill`);
   }
   requiredString(provider?.sandbox?.defaultUser, `${id}.sandbox.defaultUser`, errors);
+  if (provider?.sandbox?.metadata !== undefined) {
+    if (!provider.sandbox.metadata || typeof provider.sandbox.metadata !== "object" || Array.isArray(provider.sandbox.metadata)) {
+      errors.push(`${id}.sandbox.metadata must be an object`);
+    } else {
+      for (const [key, value] of Object.entries(provider.sandbox.metadata)) {
+        requiredString(key, `${id}.sandbox.metadata key`, errors);
+        requiredString(value, `${id}.sandbox.metadata.${key}`, errors);
+      }
+    }
+  }
   for (const field of ["homeDir", "workspaceDir"]) {
     const value = provider?.sandbox?.[field];
     if (typeof value !== "string" || !path.posix.isAbsolute(value)) {

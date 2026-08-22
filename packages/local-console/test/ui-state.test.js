@@ -44,6 +44,18 @@ test("confirmed users can switch between lobster mode and chat after refresh", (
   );
 });
 
+test("paused cloud users keep chat context visible but cannot send until resumed", () => {
+  const state = resolveTabState({
+    mode: "paused",
+    currentStep: "chat",
+    soulConfirmed: true,
+  });
+
+  assert.equal(state.chat.hidden, false);
+  assert.equal(state.chat.enabled, true);
+  assert.equal(state.soul.hidden, true);
+});
+
 test("personality remains the only forward step before confirmation", () => {
   assert.deepEqual(
     resolveTabState({ mode: "allocated", currentStep: "soul", soulConfirmed: false }),

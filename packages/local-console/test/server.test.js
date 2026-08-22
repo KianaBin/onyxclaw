@@ -9,6 +9,8 @@ function createController() {
     getStatus: () => ({ mode: "idle", instanceId: "local-mac" }),
     startLobsterMode: async () => ({ mode: "connected", connectionId: "c-1" }),
     stopLobsterMode: async () => ({ mode: "idle" }),
+    pauseLobsterMode: async () => ({ mode: "paused", connectionId: null }),
+    resumeLobsterMode: async () => ({ mode: "connected", connectionId: "c-2" }),
     resetNewUser: async () => ({ mode: "idle", currentStep: "mode", soulConfirmed: false }),
     getSoul: async () => ({ content: "# Soul\n", sha256: "abc", size: 7 }),
     saveSoul: async (content) => ({ content, sha256: "def", size: content.length }),
@@ -41,6 +43,18 @@ test("Phase 1 API exposes status, lobster mode, SOUL, and chat", async (t) => {
     headers: { "x-onyxclaw-request": "local-ui" },
   }).then((response) => response.json());
   assert.equal(started.connectionId, "c-1");
+
+  const paused = await fetch(`${app.url}/api/lobster/pause`, {
+    method: "POST",
+    headers: { "x-onyxclaw-request": "local-ui" },
+  }).then((response) => response.json());
+  assert.equal(paused.mode, "paused");
+
+  const resumed = await fetch(`${app.url}/api/lobster/resume`, {
+    method: "POST",
+    headers: { "x-onyxclaw-request": "local-ui" },
+  }).then((response) => response.json());
+  assert.equal(resumed.connectionId, "c-2");
 
   const soul = await fetch(`${app.url}/api/soul`).then((response) => response.json());
   assert.equal(soul.content, "# Soul\n");

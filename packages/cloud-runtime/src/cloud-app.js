@@ -48,6 +48,8 @@ const saga = new OpenClawBootstrapSaga({
   channel: simulator,
   gateway,
   gatewayPort: provider.openclaw.gatewayPort,
+  configPath: `${provider.sandbox.homeDir.replace(/\/$/, "")}/.openclaw/openclaw.json`,
+  workspaceDir: provider.sandbox.workspaceDir,
 });
 const controller = new CloudConsoleController({
   adapter,

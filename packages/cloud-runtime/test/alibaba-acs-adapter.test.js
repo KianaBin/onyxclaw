@@ -19,8 +19,10 @@ function provider() {
     sandbox: {
       templateId: "onyxclaw",
       timeoutMs: 300_000,
+      onTimeout: "pause",
       secure: false,
       defaultUser: "node",
+      metadata: { "agentsandbox.storage.sfs": "configured-mount" },
     },
   };
 }
@@ -45,6 +47,9 @@ function fixture({ createError, commandError } = {}) {
     },
     async kill() {
       calls.push(["kill"]);
+    },
+    async pause() {
+      calls.push(["pause"]);
     },
   };
   const client = {
@@ -91,10 +96,32 @@ test("maps provider configuration into an E2B-compatible client", async () => {
   assert.deepEqual(calls[1], ["create", {
     template: "onyxclaw",
     timeoutSeconds: 300,
+    onTimeout: "pause",
     secure: false,
-    metadata: { traceId: "trace-1" },
+    metadata: {
+      "agentsandbox.storage.sfs": "configured-mount",
+      traceId: "trace-1",
+    },
     envs: { ONYXCLAW_INSTANCE_ID: "instance-1" },
   }]);
+});
+
+test("pauses a Sandbox and reconnects it with a fresh session", async () => {
+  const { calls, clientFactory } = fixture();
+  const adapter = new E2BCompatibleAdapter({
+    provider: provider(),
+    secrets: { apiKey: "runtime-secret" },
+    clientFactory,
+  });
+  const { sandboxId } = await adapter.createSandbox();
+
+  assert.deepEqual(await adapter.pauseSandbox(sandboxId), {
+    sandboxId,
+    status: "paused",
+  });
+  await adapter.connectSandbox(sandboxId);
+
+  assert.deepEqual(calls.slice(-2), [["pause"], ["connect", sandboxId]]);
 });
 
 test("uses the configured runtime user for commands and files, then kills", async () => {

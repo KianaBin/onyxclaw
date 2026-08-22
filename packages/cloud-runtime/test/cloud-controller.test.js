@@ -17,8 +17,15 @@ function fixture() {
     async killSandbox(id) {
       calls.push(["kill", id]);
     },
+    async pauseSandbox(id) {
+      calls.push(["pause", id]);
+    },
   };
   const saga = {
+    async prepareSandbox(options) {
+      calls.push(["prepare", options]);
+      return { ...options, status: "prepared" };
+    },
     async bootstrapSandbox(options) {
       calls.push(["bootstrap", options]);
       return { ...options, connectionId: "connection-1", status: "ready" };
@@ -53,8 +60,9 @@ test("new users allocate first, then bootstrap the same Sandbox after SOUL confi
   await controller.confirmSoul("# Brave lobster");
   assert.equal(controller.getStatus().currentStep, "chat");
   assert.equal(controller.getStatus().soulConfirmed, true);
-  assert.deepEqual(calls.map(([name]) => name), ["create", "bootstrap"]);
+  assert.deepEqual(calls.map(([name]) => name), ["create", "prepare", "bootstrap"]);
   assert.equal(calls[1][1].sandboxId, "sandbox-1");
+  assert.equal(calls[2][1].sandboxId, "sandbox-1");
 });
 
 test("existing users connect by Sandbox ID and skip personality confirmation", async () => {
@@ -64,12 +72,11 @@ test("existing users connect by Sandbox ID and skip personality confirmation", a
   assert.equal(status.mode, "connected");
   assert.equal(status.currentStep, "chat");
   assert.equal(status.soulConfirmed, true);
-  assert.deepEqual(calls, [["connect", "saved-sandbox"]]);
+  assert.deepEqual(calls.map(([name]) => name), ["connect", "bootstrap"]);
 });
 
 test("existing users wait for the resumed OpenClaw Channel before chat is enabled", async () => {
   const { calls } = fixture();
-  const waits = [];
   const controller = new CloudConsoleController({
     adapter: {
       async connectSandbox(id) {
@@ -77,10 +84,9 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
         return { sandboxId: id, status: "running" };
       },
     },
-    saga: {},
-    simulator: {
-      async waitForConnection(instanceId, options) {
-        waits.push([instanceId, options]);
+    saga: {
+      async bootstrapSandbox(options) {
+        calls.push(["bootstrap", options]);
         return { connectionId: "resumed-connection" };
       },
     },
@@ -93,9 +99,30 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
     instanceId: "saved-claw",
   });
 
-  assert.deepEqual(waits, [["saved-claw", { timeoutMs: 30_000 }]]);
+  assert.equal(calls[1][0], "bootstrap");
+  assert.equal(calls[1][1].instanceId, "saved-claw");
   assert.equal(status.connectionId, "resumed-connection");
   assert.equal(status.mode, "connected");
+});
+
+test("pause and resume use the E2B lifecycle and bootstrap the persistent workspace again", async () => {
+  const { calls, controller } = fixture();
+  await controller.startLobsterMode();
+  await controller.confirmSoul("# Persistent lobster");
+
+  const paused = await controller.pauseLobsterMode();
+  assert.equal(paused.mode, "paused");
+  assert.equal(paused.connectionId, null);
+
+  const resumed = await controller.resumeLobsterMode();
+  assert.equal(resumed.mode, "connected");
+  assert.equal(resumed.connectionId, "connection-1");
+  assert.deepEqual(calls.slice(-3).map(([name]) => name), [
+    "pause",
+    "connect",
+    "bootstrap",
+  ]);
+  assert.equal(calls.at(-1)[1].soul, "# Persistent lobster");
 });
 
 test("stop kills the cloud Sandbox and resets the serial flow", async () => {

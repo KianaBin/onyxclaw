@@ -123,6 +123,23 @@ test("rejects unsafe endpoints and invalid sandbox paths", async (t) => {
   );
 });
 
+test("accepts string metadata and rejects non-string Sandbox metadata values", async (t) => {
+  const config = validConfig();
+  config.providers["vendor-a"].sandbox.metadata = {
+    "agentsandbox.storage.sfs": "{\"sfsTurboMounts\":[]}",
+  };
+  const registry = await fixture(t, config);
+  assert.equal(
+    registry.getProvider("vendor-a").sandbox.metadata["agentsandbox.storage.sfs"],
+    "{\"sfsTurboMounts\":[]}",
+  );
+
+  config.providers["vendor-a"].sandbox.metadata["agentsandbox.storage.sfs"] = {
+    sfsTurboMounts: [],
+  };
+  await assert.rejects(fixture(t, config), /sandbox\.metadata\.agentsandbox\.storage\.sfs/);
+});
+
 test("rejects an unsafe sandbox data-plane endpoint", async (t) => {
   const config = validConfig();
   config.providers["vendor-a"].api.sandboxUrl = "http://envd.vendor-a.example";

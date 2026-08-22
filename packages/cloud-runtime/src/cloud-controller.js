@@ -80,15 +80,18 @@ export class CloudConsoleController {
           connectionId: null,
         };
         await this.#adapter.connectSandbox(sandboxId);
-        const connection = this.#simulator
-          ? await this.#simulator.waitForConnection(instanceId, { timeoutMs: this.#timeoutMs })
-          : null;
+        const ready = await this.#saga.bootstrapSandbox({
+          sandboxId,
+          instanceId,
+          traceId: this.#status.traceId,
+          soul: this.#soul,
+        });
         this.#status = {
           ...this.#status,
           mode: "connected",
           currentStep: "chat",
           soulConfirmed: true,
-          connectionId: connection?.connectionId ?? null,
+          connectionId: ready.connectionId,
         };
         return this.getStatus();
       }
@@ -96,6 +99,12 @@ export class CloudConsoleController {
       const traceId = this.#traceIdFactory();
       const created = await this.#adapter.createSandbox({
         metadata: { instanceId, traceId },
+      });
+      await this.#saga.prepareSandbox({
+        sandboxId: created.sandboxId,
+        instanceId,
+        traceId,
+        buildConfig: this.#buildConfig,
       });
       this.#status = {
         ...this.#status,
@@ -143,7 +152,6 @@ export class CloudConsoleController {
       instanceId: this.#status.instanceId,
       traceId: this.#status.traceId,
       soul: content,
-      buildConfig: this.#buildConfig,
     });
     this.#status = {
       ...this.#status,
@@ -154,6 +162,61 @@ export class CloudConsoleController {
       error: null,
     };
     return { ...file, soulConfirmed: true, currentStep: "chat" };
+  }
+
+  async pauseLobsterMode() {
+    if (this.#status.mode !== "connected" || !this.#status.sandboxId) {
+      throw new Error("云端 OpenClaw 尚未连接，不能暂停");
+    }
+    this.#status = { ...this.#status, mode: "pausing", error: null };
+    try {
+      await this.#adapter.pauseSandbox(this.#status.sandboxId);
+      this.#status = {
+        ...this.#status,
+        mode: "paused",
+        currentStep: "chat",
+        connectionId: null,
+      };
+      return this.getStatus();
+    } catch (error) {
+      this.#status = {
+        ...this.#status,
+        mode: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+      throw error;
+    }
+  }
+
+  async resumeLobsterMode() {
+    if (this.#status.mode !== "paused" || !this.#status.sandboxId) {
+      throw new Error("Sandbox 当前不是暂停状态");
+    }
+    this.#status = { ...this.#status, mode: "resuming", error: null };
+    try {
+      await this.#adapter.connectSandbox(this.#status.sandboxId);
+      const ready = await this.#saga.bootstrapSandbox({
+        sandboxId: this.#status.sandboxId,
+        instanceId: this.#status.instanceId,
+        traceId: this.#status.traceId,
+        soul: this.#soul,
+      });
+      this.#status = {
+        ...this.#status,
+        mode: "connected",
+        currentStep: "chat",
+        soulConfirmed: true,
+        connectionId: ready.connectionId,
+      };
+      return this.getStatus();
+    } catch (error) {
+      this.#status = {
+        ...this.#status,
+        mode: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+      throw error;
+    }
   }
 
   async stopLobsterMode() {

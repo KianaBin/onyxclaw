@@ -90,6 +90,12 @@ export function createLocalConsoleServer({
     if (request.method === "POST" && pathname === "/api/lobster/stop") {
       return sendJson(response, 200, await controller.stopLobsterMode());
     }
+    if (request.method === "POST" && pathname === "/api/lobster/pause") {
+      return sendJson(response, 200, await controller.pauseLobsterMode());
+    }
+    if (request.method === "POST" && pathname === "/api/lobster/resume") {
+      return sendJson(response, 200, await controller.resumeLobsterMode());
+    }
     if (request.method === "POST" && pathname === "/api/session/reset") {
       const status = await controller.resetNewUser();
       operationMonitor.reset();

@@ -74,6 +74,8 @@ const elements = {
   runtimeInstanceId: document.querySelector("#runtime-instance-id"),
   runtimeConnectionId: document.querySelector("#runtime-connection-id"),
   enterLobsterMode: document.querySelector("#enter-lobster-mode"),
+  pauseSandbox: document.querySelector("#pause-sandbox"),
+  resumeSandbox: document.querySelector("#resume-sandbox"),
   providerManagerLabel: document.querySelector("#provider-manager-label"),
   modelProviderLabel: document.querySelector("#model-provider-label"),
   modelNameLabel: document.querySelector("#model-name-label"),
@@ -137,6 +139,9 @@ function renderStatus(status) {
     starting: "正在启动 OpenClaw…",
     allocated: "云端 Sandbox 已创建，等待确认性格",
     connected: "OpenClaw 已连接",
+    pausing: "正在暂停 Sandbox…",
+    paused: "Sandbox 已暂停",
+    resuming: "正在恢复 Sandbox…",
     error: "连接异常",
   };
   elements.status.className = `status-pill ${status.mode}`;
@@ -144,7 +149,9 @@ function renderStatus(status) {
   const connected = status.mode === "connected";
   const allocated = status.mode === "allocated";
   const chatReady = connected && status.soulConfirmed;
-  const busy = status.mode === "starting";
+  const busy = ["starting", "pausing", "resuming"].includes(status.mode);
+  const pauseResume = uiConfig.deploymentMode === "cloud" &&
+    uiConfig.capabilities?.pauseResume === true;
   const landing = resolveLandingView({ initialLanding, status });
   elements.resetUser.textContent = busy ? "正在重置…" : "重置新用户";
   elements.resetUser.disabled = busy;
@@ -152,6 +159,10 @@ function renderStatus(status) {
   elements.enterLobsterMode.disabled = busy;
   elements.enterLobsterMode.hidden = status.mode !== "idle";
   elements.enterLobsterMode.textContent = busy ? "正在进入…" : "进入龙虾模式";
+  elements.pauseSandbox.hidden = !pauseResume || status.mode !== "connected";
+  elements.pauseSandbox.disabled = busy;
+  elements.resumeSandbox.hidden = !pauseResume || status.mode !== "paused";
+  elements.resumeSandbox.disabled = busy;
   elements.chatInput.disabled = !chatReady;
   elements.send.disabled = !chatReady;
   elements.chatState.textContent = chatReady ? "已连接 · 可以发送" : "等待完成设置";
@@ -475,7 +486,7 @@ async function disconnectAndReset() {
 async function needsStop() {
   try {
     const current = await api("/api/status");
-    return current.mode === "connected" || current.mode === "allocated";
+    return ["connected", "allocated", "paused", "pausing", "resuming"].includes(current.mode);
   } catch {
     return false;
   }
@@ -503,6 +514,36 @@ elements.resetUser.addEventListener("click", async () => {
 elements.enterLobsterMode.addEventListener("click", async () => {
   if (elements.enterLobsterMode.disabled) return;
   await enterLobsterMode();
+});
+
+elements.pauseSandbox.addEventListener("click", async () => {
+  elements.pauseSandbox.disabled = true;
+  elements.chatState.textContent = "正在暂停 Sandbox…";
+  try {
+    const status = await api("/api/lobster/pause", { method: "POST" });
+    renderStatus(status);
+    elements.chatState.textContent = "Sandbox 已暂停 · workspace 已持久化";
+  } catch (error) {
+    notice(elements.modeNotice, `暂停失败：${error.message}`, true);
+    await refreshStatus();
+  } finally {
+    elements.pauseSandbox.disabled = false;
+  }
+});
+
+elements.resumeSandbox.addEventListener("click", async () => {
+  elements.resumeSandbox.disabled = true;
+  elements.chatState.textContent = "正在恢复并重新执行 bootstrap…";
+  try {
+    const status = await api("/api/lobster/resume", { method: "POST" });
+    renderStatus(status);
+    elements.chatState.textContent = "已恢复 · 可以发送";
+  } catch (error) {
+    notice(elements.modeNotice, `恢复失败：${error.message}`, true);
+    await refreshStatus();
+  } finally {
+    elements.resumeSandbox.disabled = false;
+  }
 });
 
 document.querySelectorAll(".tab").forEach((tab) => {

@@ -74,6 +74,8 @@ test("provisions OpenClaw and returns only public ready state", async () => {
   assert.doesNotMatch(JSON.stringify(result), /bootstrap-secret|model-secret/);
   assert.deepEqual(transitions.map(({ phase }) => phase), [
     "ALLOCATING",
+    "PREPARING",
+    "PREPARED",
     "BOOTSTRAPPING",
     "GATEWAY_READY",
     "CHANNEL_READY",
@@ -87,13 +89,13 @@ test("provisions OpenClaw and returns only public ready state", async () => {
     [
       "write",
       "sandbox-1",
-      "/home/node/.openclaw/bootstrap/openclaw.json",
+      "/home/node/.openclaw/openclaw.json",
       '{"instanceId":"instance-1","bootstrapToken":"bootstrap-secret","modelApiKey":"model-secret"}',
     ],
     [
       "write",
       "sandbox-1",
-      "/home/node/.openclaw/bootstrap/SOUL.md",
+      "/home/node/.openclaw/workspace/SOUL.md",
       "# Friendly lobster",
     ],
   ]);
@@ -111,7 +113,7 @@ test("kills a partially initialized Sandbox and revokes its token", async () => 
     }),
     (error) => {
       assert.ok(error instanceof BootstrapError);
-      assert.equal(error.phase, "BOOTSTRAPPING");
+      assert.equal(error.phase, "PREPARING");
       assert.doesNotMatch(error.message, /model-secret/);
       return true;
     },
@@ -149,4 +151,24 @@ test("bootstraps an already allocated Sandbox without creating another one", asy
     calls.some((call) => call[0] === "write" && call[1] === "existing-sandbox"),
     true,
   );
+  const writes = calls.filter(([name]) => name === "write");
+  assert.deepEqual(writes.map((call) => call[2]), [
+    "/home/node/.openclaw/workspace/SOUL.md",
+  ]);
+});
+
+test("prepares an allocated Sandbox by writing only openclaw.json", async () => {
+  const { calls, saga } = fixture();
+  const result = await saga.prepareSandbox({
+    sandboxId: "existing-sandbox",
+    instanceId: "existing-instance",
+    traceId: "existing-trace",
+    buildConfig: ({ bootstrapToken }) => ({ bootstrapToken }),
+  });
+
+  assert.equal(result.status, "prepared");
+  const writes = calls.filter(([name]) => name === "write");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][2], "/home/node/.openclaw/openclaw.json");
+  assert.doesNotMatch(writes[0][3], /SOUL/);
 });

@@ -5,9 +5,11 @@
 当前包含：
 
 - `E2BCompatibleAdapter`：把当前选中的 Provider Registry 配置映射为统一的
-  create/connect/commands/files/kill 接口；
-- `OpenClawBootstrapSaga`：创建 Sandbox、签发一次性 Channel token、写入
-  `openclaw.json` 与 `SOUL.md`，并等待 Gateway 和 Channel 就绪；
+  create/connect/pause/commands/files/kill 接口，并在 create 时合并 Provider 固定
+  metadata 与实例 trace metadata；
+- `OpenClawBootstrapSaga`：创建后立即签发一次性 Channel token 并把
+  `openclaw.json` 写到最终路径；用户确认或恢复时只写 `SOUL.md`，随后等待 Gateway
+  和 Channel 就绪；
 - 分阶段错误、Secret 脱敏和失败补偿清理；
 - `config/providers.alicloud.example.json`：ACS VPC 内 Private Protocol 配置示例。
 
@@ -24,3 +26,9 @@ npm run test:cloud
 `e2b==2.24.0 + e2b-code-interpreter==2.7.0 + kruise-agents patch` 的运行时 Client Bridge，
 随后将 Saga 接到云端 BFF API。真实 API Key 只从 Provider Registry 的环境变量映射进入，
 不能写入 JSON 配置、浏览器状态或日志。
+
+APP 为每个 Sandbox 生成独立的配置对象，直接写入
+`${homeDir}/.openclaw/openclaw.json`。workspace 路径来自 Provider Profile，可以通过
+Sandbox metadata 挂载到持久存储。暂停会调用 E2B `Sandbox.pause` 并丢弃旧 SDK
+session；恢复调用 `Sandbox.connect` 获取新控制面和数据面凭据，再执行只包含
+`SOUL.md` 写入、Gateway ready 和 Channel 回连等待的 bootstrap 阶段。

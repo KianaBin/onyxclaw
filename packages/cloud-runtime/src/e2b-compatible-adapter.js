@@ -152,8 +152,14 @@ export class E2BCompatibleAdapter {
       const session = await this.#client.create({
         template: this.#provider.sandbox.templateId,
         timeoutSeconds: Math.ceil(this.#provider.sandbox.timeoutMs / 1000),
+        ...(this.#provider.sandbox.onTimeout
+          ? { onTimeout: this.#provider.sandbox.onTimeout }
+          : {}),
         secure: this.#provider.sandbox.secure,
-        metadata,
+        metadata: {
+          ...(this.#provider.sandbox.metadata ?? {}),
+          ...(metadata ?? {}),
+        },
         envs,
       });
       return this.#remember(session);
@@ -171,6 +177,22 @@ export class E2BCompatibleAdapter {
     }, async () => {
       const session = await this.#client.connect(id);
       return this.#remember(session, id);
+    });
+  }
+
+  async pauseSandbox(sandboxId) {
+    const id = requiredString(sandboxId, "sandboxId");
+    return this.#perform("pause", {
+      api: "Sandbox.pause",
+      target: SANDBOX_SERVICE_TARGET,
+      operationContext: { label: "SANDBOX", value: id },
+      object: { type: "Sandbox", id, state: "pausing" },
+      resultObject: () => ({ type: "Sandbox", id, state: "paused" }),
+    }, async () => {
+      const session = await this.#getSession(id);
+      await session.pause();
+      this.#sessions.delete(id);
+      return { sandboxId: id, status: "paused" };
     });
   }
 

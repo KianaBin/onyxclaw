@@ -10,8 +10,8 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-e2b-traffic-token`
-- 已核验镜像摘要：`sha256:042c6416d5654fe42d743594449abdcf4f67733192f5b817aac67bcfe55bbc6d`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-sfs-lifecycle`
+- 已核验镜像摘要：`sha256:7f1a7d5dd716f8b499da45457a097e05d253af1f03dd921f0689ad8db550ba8b`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
 - Channel 私网 ELB：`192.168.2.13:18890`（后端 NodePort `192.168.2.246:31965`）
@@ -22,14 +22,16 @@
 
 - `Deployment/onyxclaw-app`：`1/1 Ready`、`1/1 Available`
 - APP Pod：`Running`、容器重启次数 `0`
-- 实际镜像 ID：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:042c6416d5654fe42d743594449abdcf4f67733192f5b817aac67bcfe55bbc6d`
+- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:7f1a7d5dd716f8b499da45457a097e05d253af1f03dd921f0689ad8db550ba8b`
 - `/api/status`：返回 `mode: idle`，健康检查通过
 - `/api/ui-config`：已确认 `deploymentMode: cloud`、`providerId: huaweicloud-agentsphere`、`region: cn-south-1`
 - 公网 NodePort：已从集群外验证 `http://113.45.154.231:30080` 可达
 - AgentSphere API Endpoint：已配置为 `https://agentsphere.cn-south-1.myhuaweicloud.com`
 - Sandbox 数据面 Endpoint：已配置为 `https://agent-gateway-sandbox-muyden3dgi.agentgateway.cn-south-1.huaweicloud-agentnetwork.com`
 - E2B API Key：已通过 Kubernetes Secret 注入，本文和部署清单不记录其值
-- E2B SDK 验证：`Sandbox.list` 返回成功，网络可达且鉴权通过；当前首屏 Sandbox 数量为 `0`
+- E2B SDK 验证：早期验收成功；本轮再次验证时 `Sandbox.list` 与 `Sandbox.create`
+  均返回 `403 sandbox.auth.0001`。CCE Secret 与提供值的 SHA-256 一致，需在
+  AgentSphere 侧恢复或重新签发 API Key 后继续真实生命周期验收。
 - Channel 回连：`ws://192.168.2.13:18890/connect` 已从 CCE 节点验证返回 WebSocket `101 Switching Protocols`
 - 模型：已配置 DeepSeek provider、`deepseek-v4-flash` 和正式模型 API Key；Key 仅保存在 Kubernetes Secret 中
 - DeepSeek 验证：从 CCE 节点调用 `https://api.deepseek.com/models` 返回 HTTP `200`，鉴权成功且模型列表包含 `deepseek-v4-flash`
@@ -66,19 +68,19 @@ OpenClaw 派生镜像已在 CCE 节点使用 `/home/hzp/openclaw-image` 作为�
 镜像引用：
 
 ```text
-swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.8
+swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.8-sfs-lifecycle
 ```
 
 正式注册 AgentSphere Template 时建议使用不可变引用：
 
 ```text
-swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:5d24fe1d8c576cb6052a6505156534d18e557ea9910bfe686b6736d22c646c69
+swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:d2790899ef5275a1cda49c4f45338c199a438b86912b12ff6c7d6a25283dac7f
 ```
 
 构建结果：
 
-- 本地派生镜像 ID：`sha256:75f04c5021db445849f8df287042d57de3f6daac2da1abd6f7de09aa3a9d0d99`
-- SWR manifest digest：`sha256:5d24fe1d8c576cb6052a6505156534d18e557ea9910bfe686b6736d22c646c69`
+- 本地派生镜像 ID：`sha256:39142940d185`
+- SWR manifest digest：`sha256:d2790899ef5275a1cda49c4f45338c199a438b86912b12ff6c7d6a25283dac7f`
 - 平台：`linux/amd64`
 - 镜像大小：`1057055539` bytes
 - 构建目录：`/home/hzp/openclaw-image`
@@ -93,7 +95,12 @@ swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:5d24fe1d8c57
 /opt/onyxclaw/bin/envd -isnotfc -port 49983 -verbose -no-cgroups
 ```
 
-随后通过 `/opt/onyxclaw/bin/envd-healthcheck.sh` 检查 `http://127.0.0.1:49983/health` 是否返回 HTTP `204`。envd 就绪后，容器保持预热状态并等待 `openclaw.json` 和 `SOUL.md`，最后以 `node` 用户启动监听 `18789` 的 OpenClaw Gateway。
+随后通过 `/opt/onyxclaw/bin/envd-healthcheck.sh` 检查 `http://127.0.0.1:49983/health` 是否返回 HTTP `204`。envd 就绪后，入口只等待最终路径 `/home/node/.openclaw/openclaw.json`；文件出现后立即以 `node` 用户启动监听 `18789` 的 OpenClaw Gateway，不再等待或复制 bootstrap 目录中的 `SOUL.md`。
+
+新派生镜像对应的 AgentSphere Template 已由用户在控制台重新创建，Template ID 为
+`4b437fde-0069-4738-a11b-c264c49b57a3`。当前 AgentSphere 不支持通过 API 更新或创建
+模板；此后每次修改 OpenClaw 派生镜像，都必须由用户基于新镜像重新创建模板，并把新
+Template ID 回填到 Provider Profile 后才能发放验证。
 
 临时容器验收已确认：envd 进程存活、健康接口返回 `204`、Docker HEALTHCHECK 为 `healthy`、Channel Plugin 的 OpenClaw peer 链接有效，并且 bootstrap 目录存在。验收容器已删除，SWR 推送完成后节点已执行 `docker logout` 清除登录状态。
 
@@ -105,8 +112,8 @@ Cloud APP 在进程启动时会校验 Provider Profile，并要求基础 OpenCla
 | --- | --- | --- |
 | Sandbox API | `https://agentsphere.cn-south-1.myhuaweicloud.com` | bridge 显式传入 `api_url`，不会再由 SDK 拼接 `api.` 前缀 |
 | Sandbox 数据面 | `https://agent-gateway-sandbox-muyden3dgi.agentgateway.cn-south-1.huaweicloud-agentnetwork.com` | 通过 `api.sandboxUrl` 映射为 SDK 的 `E2B_SANDBOX_URL`；DNS/TLS 可达 |
-| Channel 回连 URL | `ws://192.168.2.13:18890/connect` | 私网 ELB 入口，WebSocket 升级验证成功 |
-| Sandbox Template | `b42d35f0-3b55-4857-8a28-be2543808932` | 已配置，尚需执行实际创建验收 |
+| Channel 回连 URL | `ws://192.168.2.13:18890/connect` | ELB VIP 使用 Service port；API Key 恢复后需从 Sandbox 再验 WebSocket 回连 |
+| Sandbox Template | `4b437fde-0069-4738-a11b-c264c49b57a3` | 对应 `0.3.8-sfs-lifecycle` 派生镜像，尚需执行实际创建验收 |
 | Model Provider / ID | `deepseek` / `deepseek-v4-flash` | Provider 已配置 |
 | E2B API Key | Kubernetes Secret 中的真实值 | 已配置，不写入 Git |
 | 模型 API Key | Kubernetes Secret 中的真实值 | 已配置，不写入 Git 或备份文件 |
@@ -114,6 +121,32 @@ Cloud APP 在进程启动时会校验 Provider Profile，并要求基础 OpenCla
 | OpenClaw 基础配置 | DeepSeek 配置已注入 | 模型 API Key 使用运行时占位符 |
 
 Template ID 已配置。实际创建验收前仍需确认 Template 的默认用户、路径、入口和 AgentSphere 网络绑定与当前 Provider 配置一致。
+
+### SFS Turbo 与暂停恢复配置
+
+创建 Sandbox 时，APP 把下面的 Provider 固定 metadata 与 `instanceId/traceId` 合并后传给
+E2B `Sandbox.create`：
+
+```json
+{
+  "agentsandbox.storage.sfs": "{\"sfsTurboMounts\":[{\"sfsTurboId\":\"d38073b5-7002-4279-ab54-32faff2a0132\",\"sharePath\":\"/hzp/workspace\",\"readOnly\":false,\"mountDir\":\"/home/node/.openclaw/workspace\"}]}"
+}
+```
+
+`sharePath` 使用当前提供的 SFS 内目录 `/hzp/workspace`。若 AgentSphere 创建接口要求控制台
+显示的完整共享路径而不是子目录路径，需要把这一项替换成完整值；当前 API Key 的 403
+发生在鉴权阶段，因此尚未进入 metadata/SFS 参数校验。
+
+生命周期顺序如下：
+
+1. create：携带 SFS metadata 和 `on_timeout=pause` 创建 Sandbox；
+2. prepare：立即把完整 `openclaw.json` 写到 `/home/node/.openclaw/openclaw.json`，触发 Gateway 启动；
+3. bootstrap：用户确认 SOUL 后只写 `/home/node/.openclaw/workspace/SOUL.md`，等待 Gateway 和 Channel；
+4. pause：页面调用 E2B `Sandbox.pause`；
+5. resume：页面调用 `Sandbox.connect` 获取新会话，再次执行 SOUL 写入和 Gateway/Channel 就绪等待。
+
+SFS 仅挂载 workspace，因此会持久化 `SOUL.md` 和 workspace 中其他 Markdown 文件；包含模型
+和 Channel token 的 `openclaw.json` 仍留在 Sandbox 本地文件系统，不写入 SFS。
 
 ### E2B Endpoint 修复说明
 
@@ -133,7 +166,7 @@ Agent Gateway 还要求每次 Sandbox 数据面请求携带创建/连接响应�
 `E2B-Traffic-Access-Token` 请求头注入 envd 的 Files、Commands 和健康检查请求；E2B
 API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 
-### 2026-08-22 真实端到端验收
+### 2026-08-22 历史真实端到端验收
 
 通过公网 demo app 的 `/api/*` 接口完整执行了新用户流程：
 
@@ -162,7 +195,9 @@ CCE Service `onyxclaw-app-27700` 的 ELB VIP 是 `192.168.2.13`，Service port �
 - ELB：`192.168.2.13:18890`
 - 节点 NodePort：`192.168.2.246:31965`
 
-`192.168.2.13:31965` 把 ELB VIP 和 NodePort 混在一起，节点实测会超时，不能作为 Channel URL。
+`192.168.2.13:31965` 把 ELB VIP 和 NodePort 混在一起，节点实测会超时，不能作为 Channel
+URL。`31965` 只能与节点地址 `192.168.2.246` 组合使用；当前 Profile 因此保留已经完成
+WebSocket `101` 验证的 `ws://192.168.2.13:18890/connect`。
 
 ### E2B SDK 验证脚本
 
@@ -176,7 +211,9 @@ python3 -m venv .venv
   --prompt-api-key
 ```
 
-本次实测输出为 `ok: true`、`network: reachable`、`authentication: accepted`、`firstPageCount: 0`。API Key 未写入脚本、部署文档或命令历史。
+早期实测输出为 `ok: true`、`network: reachable`、`authentication: accepted`、
+`firstPageCount: 0`。本轮同一脚本返回 `403 sandbox.auth.0001`，以最新结果为准。
+API Key 未写入脚本或部署文档。
 
 DeepSeek 的 OpenClaw 基础配置示例位于 [`deploy/huaweicloud-cce/openclaw-base-config.deepseek.example.json`](../deploy/huaweicloud-cce/openclaw-base-config.deepseek.example.json)，其中 `__ONYXCLAW_MODEL_API_KEY__` 由 APP 在 Sandbox 启动时替换。
 
@@ -233,7 +270,7 @@ curl -fsS http://113.45.154.231:30080/api/ui-config
 
 ## Sandbox 联调前必须配置
 
-1. 验证 AgentSphere Template `b42d35f0-3b55-4857-8a28-be2543808932` 与当前派生镜像匹配，并确认 `defaultUser=node`、home/workspace 路径、OpenClaw 启动命令、envd 健康状态和 Gateway 端口 `18789`。
+1. 验证 AgentSphere Template `4b437fde-0069-4738-a11b-c264c49b57a3` 与当前派生镜像匹配，并确认 `defaultUser=node`、home/workspace 路径、OpenClaw 启动命令、envd 健康状态和 Gateway 端口 `18789`；派生镜像更新后需人工重新创建模板并替换此 ID。
 2. 确认 Sandbox VPC 可以路由到 Channel 私网 ELB `192.168.2.13:18890`；正式环境建议配置私有域名和 TLS。
 3. 当前 APP 配置仍要求一个非空 Channel signing secret，但 v0.3.8 实际握手使用每个实例动态生成的 `bootstrapToken`；现有随机 Secret 可以保留，不需要手工写入 Template。若后续版本启用长期签名校验，再统一轮换 APP 与插件侧 Secret。
 4. 验证 Sandbox 到 `https://api.deepseek.com` 的 DNS、路由、安全组和 TLS 连通性；正式 DeepSeek API Key 已配置。

@@ -22,20 +22,11 @@ openclaw-base-config.json
   → Kubernetes Secret/APP 环境变量
   → APP 替换模型密钥并补充 Channel 动态字段
   → E2B Files.write
-  → /home/node/.openclaw/bootstrap/openclaw.json
-  → 镜像 entrypoint 复制
   → /home/node/.openclaw/openclaw.json
   → OpenClaw Gateway 启动
 ```
 
-入口脚本里的 shell 变量：
-
-```bash
-bootstrap_config="${ONYXCLAW_BOOTSTRAP_DIR}/openclaw.json"
-```
-
-只是指向 bootstrap 文件的路径，默认值为
-`/home/node/.openclaw/bootstrap/openclaw.json`，并不保存 JSON 内容。
+APP 直接写最终配置路径；入口不再从 bootstrap 目录复制配置。
 
 ## 2. 两类配置文件
 
@@ -89,46 +80,42 @@ kubectl --kubeconfig iac/alicloud-acs/generated/kubeconfig \
 | `channels.onyxclaw.bootstrapToken` | 当前实例的一次性 Channel 注册 token |
 
 基础配置对象不会被原地修改。APP 为每个 Sandbox 生成独立的运行时对象，序列化后写入
-bootstrap 目录。
+最终的 `.openclaw/openclaw.json`。
 
 ## 3. 生成和写入时机
 
 新用户创建流程分成两个阶段：
 
-1. “创建云端 Sandbox”只从 ACS `SandboxSet/onyxclaw` 领取一个预热实例；
-2. 用户确认 `SOUL.md` 后，Controller 才调用 `bootstrapSandbox()`。
+1. “创建云端 Sandbox”领取预热实例后立即调用 `prepareSandbox()`；
+2. `prepareSandbox()` 签发 Channel token、构造配置并直接写入最终 `openclaw.json`；
+3. 用户确认 `SOUL.md` 后，Controller 调用 `bootstrapSandbox()`。
 
-Bootstrap Saga 随后执行：
+`bootstrapSandbox()` 只执行：
 
-1. 为当前 `instanceId` 登记一次性 Channel bootstrap token；
-2. 调用 `buildOpenClawConfig()` 合成完整配置；
-3. 使用 E2B `Files.write` 以 `node` 用户写入：
-   - `/home/node/.openclaw/bootstrap/openclaw.json`；
-   - `/home/node/.openclaw/bootstrap/SOUL.md`；
-4. 等待 Gateway `/readyz`；
-5. 等待 OnyxClaw Channel WebSocket 注册；
-6. 两项都成功后才把 Sandbox 标记为 `READY`。
+1. 使用 E2B `Files.write` 以 `node` 用户写入
+   `/home/node/.openclaw/workspace/SOUL.md`；
+2. 等待 Gateway `/readyz`；
+3. 等待 OnyxClaw Channel WebSocket 注册；
+4. 两项都成功后才把 Sandbox 标记为 `READY`。
 
 如果生成、写入或就绪检查失败，Saga 会撤销 bootstrap token 并 kill Sandbox，避免半
 初始化实例继续占用 ACS 资源。
 
 ## 4. 镜像入口如何消费配置
 
-派生镜像入口会先创建 bootstrap、workspace 和配置目录，然后轮询两个 bootstrap 文件：
+派生镜像入口会先创建 bootstrap、workspace 和配置目录，然后只轮询最终配置文件：
 
 ```bash
-while [[ ! -s "${bootstrap_config}" || ! -s "${bootstrap_soul}" ]]; do
+while [[ ! -s "${OPENCLAW_CONFIG_PATH}" ]]; do
   sleep 1
 done
 ```
 
-两个文件都非空后，入口执行：
+配置文件非空后，入口只修正配置权限：
 
 ```bash
-cp "${bootstrap_config}" "${OPENCLAW_CONFIG_PATH}"
-cp "${bootstrap_soul}" "${OPENCLAW_WORKSPACE_DIR}/SOUL.md"
-chmod 0600 "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_WORKSPACE_DIR}/SOUL.md"
-chown node:node "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_WORKSPACE_DIR}/SOUL.md"
+chmod 0600 "${OPENCLAW_CONFIG_PATH}"
+chown node:node "${OPENCLAW_CONFIG_PATH}"
 ```
 
 最终路径为：
@@ -149,9 +136,8 @@ node /app/openclaw.mjs gateway --bind lan --port 18789
 | --- | --- | --- | --- |
 | `openclaw-base-config.json` | 部署者受控环境 | Gateway token；模型 Key 仍为占位符 | APP 部署流程 |
 | `ONYXCLAW_OPENCLAW_BASE_CONFIG_JSON` | APP 容器环境变量 | 同上 | `cloud-app.js` |
-| `bootstrap/openclaw.json` | Sandbox 临时文件系统 | 是 | 镜像 entrypoint |
-| `bootstrap_config` | entrypoint shell 变量 | 否，只是路径 | entrypoint |
 | `.openclaw/openclaw.json` | Sandbox 临时文件系统 | 是 | OpenClaw Gateway |
+| `.openclaw/workspace/SOUL.md` | workspace，可由 Provider 挂载持久卷 | 否 | OpenClaw Agent |
 
 ## 6. 安全注意事项
 

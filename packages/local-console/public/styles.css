@@ -131,6 +131,8 @@ h1 em { color: var(--coral); font-weight: 500; }
 .chat-panel { display: none; padding: 14px 14px 12px; overflow: hidden; }
 .chat-panel.active { display: flex; flex-direction: column; min-height: 0; }
 .chat-head { padding: 0 5px; flex: 0 0 auto; }
+.runtime-actions { display: flex; gap: 8px; align-items: center; }
+.runtime-actions .button { min-height: 34px; padding: 7px 12px; font-size: 12px; }
 .chat-state { align-self: flex-start; margin: 6px 5px 2px; padding: 5px 8px; color: #387b6c; border-radius: 999px; background: rgba(112,219,186,.16); font-size: 8px; flex: 0 0 auto; }
 .messages { flex: 1 1 0; height: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 5px; display: flex; flex-direction: column; gap: 10px; }
 .empty-chat { margin: auto; text-align: center; color: var(--phone-muted); font-size: 10px; }

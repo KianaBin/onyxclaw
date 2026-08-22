@@ -73,17 +73,16 @@ Channel Plugin 负责让 Sandbox 中的 OpenClaw Gateway 使用一次性 bootstr
 ACS `SandboxSet` 会先创建可复用的预热实例。此时实例尚未分配给具体用户，也没有用户
 的性格、模型和 Channel 配置，因此不能立即启动未配置的 OpenClaw Gateway。
 
-派生镜像用自定义 `entrypoint.sh` 替换默认入口。入口启动后等待两个非空文件：
+派生镜像用自定义 `entrypoint.sh` 替换默认入口。入口启动后只等待最终配置文件：
 
-- `/home/node/.openclaw/bootstrap/openclaw.json`；
-- `/home/node/.openclaw/bootstrap/SOUL.md`。
+- `/home/node/.openclaw/openclaw.json`。
 
-APP/BFF 领取 Sandbox 后，通过 E2B Files API 写入这两个文件。入口检测到文件后才会：
+APP/BFF 领取 Sandbox 后，通过 E2B Files API 直接写入配置。入口检测到文件后才会：
 
-1. 把配置复制到 `/home/node/.openclaw/openclaw.json`；
-2. 把性格文件复制到 `/home/node/.openclaw/workspace/SOUL.md`；
-3. 修正文件权限和所有者；
-4. 启动 OpenClaw Gateway。
+1. 修正配置文件权限和所有者；
+2. 启动 OpenClaw Gateway。
+
+`SOUL.md` 由后续 bootstrap 直接写入 workspace，不阻塞 Gateway 启动。
 
 这使“领取预热 Sandbox”和“为当前用户启动 OpenClaw”成为两个清晰阶段，避免不同用户
 共享错误配置或未配置 Gateway 提前暴露端口。
@@ -106,7 +105,7 @@ OpenClaw 对同一组文件位置达成一致。
 ### 2.6 root 初始化后降权运行
 
 镜像入口以 root 启动，以便 ACS 注入的 envd、E2B 命令执行和初始化目录创建正常工作。
-配置就绪后，入口将 `openclaw.json` 和 `SOUL.md` 设置为：
+配置就绪后，入口将 `openclaw.json` 设置为：
 
 - 所有者 `node:node`；
 - 权限 `0600`。
@@ -159,7 +158,8 @@ APP/BFF 的初始化顺序为：
 ```text
 领取 Sandbox
   → 登记一次性 Channel token
-  → 写入 openclaw.json 和 SOUL.md
+  → 直接写入最终 openclaw.json
+  → 用户确认后写入 workspace/SOUL.md
   → 等待 Gateway :18789 就绪
   → 等待 Channel WebSocket 注册
   → 标记 Sandbox READY
