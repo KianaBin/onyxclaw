@@ -50,6 +50,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   const client = factory({
     apiKey: "runtime-secret",
     baseUrl: "http://sandbox-manager.sandbox-system.svc.cluster.local:7788",
+    sandboxUrl: "http://envd-gateway.sandbox-system.svc.cluster.local:49983",
     requestTimeoutMs: 30_000,
     sdkPatch: "kruise-agents-private-protocol",
   });
@@ -70,6 +71,10 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   assert.deepEqual(fake.calls[0].args, ["/app/e2b-bridge.py"]);
   assert.equal(fake.calls[0].options.env.E2B_API_KEY, "runtime-secret");
   assert.equal(fake.calls[0].options.env.E2B_BASE_URL, "http://sandbox-manager.sandbox-system.svc.cluster.local:7788");
+  assert.equal(
+    fake.calls[0].options.env.E2B_SANDBOX_URL,
+    "http://envd-gateway.sandbox-system.svc.cluster.local:49983",
+  );
   assert.equal(
     fake.calls[0].options.env.E2B_SDK_PATCH,
     "kruise-agents-private-protocol",
@@ -139,6 +144,11 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   );
   assert.ok(source.indexOf("sdk_patch ==") < source.indexOf("from e2b import Sandbox"));
   assert.ok(source.indexOf("patch_e2b(") < source.indexOf("from e2b import Sandbox"));
+  assert.match(source, /os\.environ\["E2B_API_URL"\] = api_url/);
+  assert.match(source, /"api_url": api_url/);
+  assert.match(source, /"sandbox_url"/);
+  assert.match(source, /"E2B-Traffic-Access-Token"/);
+  assert.match(source, /traffic_access_token/);
   assert.match(source, /"create"|op == "create"/);
   assert.match(source, /"connect"|op == "connect"/);
   assert.match(source, /"command"|op == "command"/);

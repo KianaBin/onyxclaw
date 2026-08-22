@@ -12,7 +12,10 @@ from urllib.parse import urlparse
 base_url = urlparse(os.environ["E2B_BASE_URL"])
 if base_url.scheme not in ("http", "https") or not base_url.netloc:
     raise RuntimeError("E2B_BASE_URL must be an HTTP(S) URL")
-os.environ["E2B_DOMAIN"] = base_url.netloc
+api_url = base_url.geturl().rstrip("/")
+api_domain = base_url.hostname
+os.environ["E2B_API_URL"] = api_url
+os.environ["E2B_DOMAIN"] = api_domain
 
 sdk_patch = os.environ.get("E2B_SDK_PATCH", "none")
 if sdk_patch == "kruise-agents-private-protocol":
@@ -22,11 +25,25 @@ if sdk_patch == "kruise-agents-private-protocol":
 elif sdk_patch != "none":
     raise RuntimeError(f"unsupported E2B_SDK_PATCH: {sdk_patch}")
 from e2b import Sandbox
+from e2b.connection_config import ConnectionConfig
 
 
 api_key = os.environ["E2B_API_KEY"]
+sandbox_url = os.environ.get("E2B_SANDBOX_URL")
 route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
+
+
+def api_options():
+    """Keep the SDK from deriving https://api.<domain> for compatible providers."""
+    options = {
+        "api_key": api_key,
+        "api_url": api_url,
+        "domain": api_domain,
+    }
+    if sandbox_url:
+        options["sandbox_url"] = sandbox_url
+    return options
 
 
 def safe_error(error):
@@ -58,12 +75,29 @@ def safe_error(error):
 
 
 def routed(session):
-    if not route_domain:
+    traffic_token = session.traffic_access_token
+    if not route_domain and not traffic_token:
         return session
+    original = session.connection_config
+    sandbox_headers = original.sandbox_headers
+    if traffic_token:
+        sandbox_headers["E2B-Traffic-Access-Token"] = traffic_token
+    connection_config = ConnectionConfig(
+        domain=original.domain,
+        debug=original.debug,
+        api_key=original.api_key,
+        api_url=original.api_url,
+        sandbox_url=sandbox_url,
+        access_token=original.access_token,
+        request_timeout=original.request_timeout,
+        headers=original.headers.copy(),
+        extra_sandbox_headers=sandbox_headers,
+        proxy=original.proxy,
+    )
     return Sandbox(
         sandbox_id=session.sandbox_id,
-        sandbox_domain=route_domain,
-        connection_config=session.connection_config,
+        sandbox_domain=route_domain or session.sandbox_domain,
+        connection_config=connection_config,
         envd_version=session._envd_version,
         envd_access_token=session._envd_access_token,
         traffic_access_token=session.traffic_access_token,
@@ -72,7 +106,7 @@ def routed(session):
 
 def connect_session(sandbox_id):
     if sandbox_id not in sessions:
-        claimed = Sandbox.connect(sandbox_id, api_key=api_key)
+        claimed = Sandbox.connect(sandbox_id, **api_options())
         sessions[sandbox_id] = (claimed, routed(claimed))
     return sessions[sandbox_id]
 
@@ -85,7 +119,7 @@ def dispatch(op, params):
             metadata=params.get("metadata"),
             envs=params.get("envs"),
             secure=params.get("secure", True),
-            api_key=api_key,
+            **api_options(),
         )
         sessions[claimed.sandbox_id] = (claimed, routed(claimed))
         return {"sandboxId": claimed.sandbox_id}

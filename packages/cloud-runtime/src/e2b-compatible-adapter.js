@@ -89,6 +89,7 @@ export class E2BCompatibleAdapter {
     this.#client = clientFactory({
       apiKey: secrets.apiKey,
       baseUrl: provider.api.baseUrl,
+      ...(provider.api.sandboxUrl ? { sandboxUrl: provider.api.sandboxUrl } : {}),
       requestTimeoutMs: provider.api.requestTimeoutMs,
       sdkPatch: provider.api.sdkPatch ?? "none",
     });

@@ -17,6 +17,7 @@ function validConfig() {
         protocol: "e2b-compatible",
         api: {
           baseUrl: "https://sandbox.vendor-a.example",
+          sandboxUrl: "https://envd.vendor-a.example",
           apiKeyEnv: "VENDOR_A_E2B_API_KEY",
           compatibilityVersion: "e2b-v2",
           requestTimeoutMs: 30_000,
@@ -120,6 +121,13 @@ test("rejects unsafe endpoints and invalid sandbox paths", async (t) => {
     fixture(t, config),
     /api\.baseUrl must use https|workspaceDir must be absolute/,
   );
+});
+
+test("rejects an unsafe sandbox data-plane endpoint", async (t) => {
+  const config = validConfig();
+  config.providers["vendor-a"].api.sandboxUrl = "http://envd.vendor-a.example";
+
+  await assert.rejects(fixture(t, config), /api\.sandboxUrl must use https/);
 });
 
 test("rejects unknown provider-specific SDK patches", async (t) => {

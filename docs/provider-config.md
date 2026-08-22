@@ -89,6 +89,7 @@ ONYXCLAW_PROVIDER=vendor-a
 `ProviderRegistry` 在调用云 API 前执行 fail-fast 校验：
 
 - 外部 API 必须使用 HTTPS；
+- 可选的 `api.sandboxUrl` 是 Sandbox envd 数据面地址，也必须使用 HTTPS；
 - 外部 Channel 必须使用 WSS；
 - HTTP/WS 只允许 loopback mock；
 - workspace 和 HOME 必须是绝对路径；
@@ -103,7 +104,7 @@ ONYXCLAW_PROVIDER=vendor-a
 
 1. 复制 `providers.example.json` 中的 Profile；
 2. 使用新的稳定 provider ID 和独立的 Secret 环境变量名；
-3. 填写 API URL、Template、路径、网络和能力声明；
+3. 填写控制面 `api.baseUrl`、可选数据面 `api.sandboxUrl`、Template、路径、网络和能力声明；
    标准 E2B 兼容服务保持 `api.sdkPatch: "none"`，不要加载其他厂商的 SDK patch；
 4. 运行 Registry 单元测试和配置校验；
 5. 运行 E2B contract tests；

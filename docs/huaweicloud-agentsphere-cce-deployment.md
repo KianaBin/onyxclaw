@@ -190,6 +190,7 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
       "protocol": "e2b-compatible",
       "api": {
         "baseUrl": "https://<agentsphere-vpc-endpoint>",
+        "sandboxUrl": "https://<agentsphere-sandbox-gateway-endpoint>",
         "privateNetworkOnly": true,
         "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY",
         "compatibilityVersion": "agentsphere-e2b-poc",
@@ -237,6 +238,9 @@ Cloud APP 未设置 `ONYXCLAW_PROVIDER_CONFIG` 时，会回退到镜像内的 AC
 
 - 若 AgentSphere 私网 Endpoint 支持 HTTPS，保留 `https://`。`privateNetworkOnly`
   仍可保留，用于声明网络边界；
+- `api.baseUrl` 是 E2B 控制面地址，传给 SDK 的 `api_url`；`api.sandboxUrl` 是
+  Sandbox envd 数据面网关，传给 SDK 的 `sandbox_url`/`E2B_SANDBOX_URL`。不要给
+  `baseUrl` 手工增加 `api.` 前缀，也不要混用两个地址；
 - 仅当服务方明确只提供私网 HTTP 时，才改为 `http://`。此时必须同时设置
   `api.privateNetworkOnly: true` 和 `capabilities.vpc: true`；
 - 标准 E2B 兼容服务必须使用 `sdkPatch: "none"`。不要使用

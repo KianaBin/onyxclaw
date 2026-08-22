@@ -84,6 +84,16 @@ function validateProvider(id, provider) {
     errors,
     { allowPrivateInsecure: vpcPrivateApi },
   );
+  if (provider?.api?.sandboxUrl !== undefined) {
+    validateEndpoint(
+      provider.api.sandboxUrl,
+      `${id}.api.sandboxUrl`,
+      "https:",
+      "http:",
+      errors,
+      { allowPrivateInsecure: vpcPrivateApi },
+    );
+  }
   positiveInteger(provider?.api?.requestTimeoutMs, `${id}.api.requestTimeoutMs`, errors);
   if (!sdkPatches.has(provider?.api?.sdkPatch ?? "none")) {
     errors.push(
