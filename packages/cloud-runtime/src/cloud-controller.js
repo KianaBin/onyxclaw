@@ -24,6 +24,7 @@ export class CloudConsoleController {
   #chatId;
   #helloResponse;
   #soul;
+  #soulRestore;
   #status;
 
   constructor({
@@ -51,6 +52,7 @@ export class CloudConsoleController {
     this.#eventIdFactory = eventIdFactory;
     this.#chatId = chatId;
     this.#soul = defaultSoul;
+    this.#soulRestore = defaultSoul;
     this.#status = {
       mode: "idle",
       currentStep: "mode",
@@ -140,28 +142,50 @@ export class CloudConsoleController {
   }
 
   restoreSoul() {
-    this.#soul = this.#defaultSoul;
+    this.#soul = this.#soulRestore;
     return soulFile(this.#soul);
   }
 
   async confirmSoul(content) {
-    if (this.#status.mode !== "allocated") throw new Error("请先创建云端 Sandbox");
+    const resumeConfirmation = this.#status.mode === "resume-confirmation";
+    if (this.#status.mode !== "allocated" && !resumeConfirmation) {
+      throw new Error("请先创建云端 Sandbox 或恢复暂停的 Sandbox");
+    }
     const file = this.saveSoul(content);
-    const ready = await this.#saga.bootstrapSandbox({
-      sandboxId: this.#status.sandboxId,
-      instanceId: this.#status.instanceId,
-      traceId: this.#status.traceId,
-      soul: content,
-    });
-    this.#status = {
-      ...this.#status,
-      mode: "connected",
-      currentStep: "chat",
-      soulConfirmed: true,
-      connectionId: ready.connectionId,
-      error: null,
-    };
-    return { ...file, soulConfirmed: true, currentStep: "chat" };
+    try {
+      const ready = await this.#saga.bootstrapSandbox({
+        sandboxId: this.#status.sandboxId,
+        instanceId: this.#status.instanceId,
+        traceId: this.#status.traceId,
+        soul: content,
+        cleanupOnFailure: !resumeConfirmation,
+      });
+      this.#soulRestore = content;
+      this.#status = {
+        ...this.#status,
+        mode: "connected",
+        currentStep: "chat",
+        soulConfirmed: true,
+        connectionId: ready.connectionId,
+        error: null,
+      };
+      return { ...file, soulConfirmed: true, currentStep: "chat" };
+    } catch (error) {
+      if (resumeConfirmation) {
+        try {
+          await this.#adapter.pauseSandbox(this.#status.sandboxId);
+        } catch {}
+        this.#status = {
+          ...this.#status,
+          mode: "paused",
+          currentStep: "chat",
+          soulConfirmed: true,
+          connectionId: null,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+      throw error;
+    }
   }
 
   async pauseLobsterMode() {
@@ -193,27 +217,29 @@ export class CloudConsoleController {
       throw new Error("Sandbox 当前不是暂停状态");
     }
     this.#status = { ...this.#status, mode: "resuming", error: null };
+    let connectedForResume = false;
     try {
       await this.#adapter.connectSandbox(this.#status.sandboxId);
-      const ready = await this.#saga.bootstrapSandbox({
-        sandboxId: this.#status.sandboxId,
-        instanceId: this.#status.instanceId,
-        traceId: this.#status.traceId,
-        soul: this.#soul,
-        cleanupOnFailure: false,
-      });
+      connectedForResume = true;
+      const persistentSoul = await this.#saga.readPersistentSoul(
+        this.#status.sandboxId,
+      );
+      this.#soul = persistentSoul.content;
+      this.#soulRestore = persistentSoul.content;
       this.#status = {
         ...this.#status,
-        mode: "connected",
-        currentStep: "chat",
-        soulConfirmed: true,
-        connectionId: ready.connectionId,
+        mode: "resume-confirmation",
+        currentStep: "soul",
+        soulConfirmed: false,
+        connectionId: null,
       };
       return this.getStatus();
     } catch (error) {
-      try {
-        await this.#adapter.pauseSandbox(this.#status.sandboxId);
-      } catch {}
+      if (connectedForResume) {
+        try {
+          await this.#adapter.pauseSandbox(this.#status.sandboxId);
+        } catch {}
+      }
       this.#status = {
         ...this.#status,
         mode: "paused",
@@ -228,7 +254,12 @@ export class CloudConsoleController {
     if (this.#status.sandboxId) {
       await this.#adapter.killSandbox(this.#status.sandboxId);
     }
+    return this.#clearLocalState();
+  }
+
+  #clearLocalState(extra = {}) {
     this.#soul = this.#defaultSoul;
+    this.#soulRestore = this.#defaultSoul;
     this.#helloResponse = undefined;
     this.#status = {
       mode: "idle",
@@ -240,11 +271,16 @@ export class CloudConsoleController {
       traceId: null,
       error: null,
     };
-    return this.getStatus();
+    return { ...this.getStatus(), ...extra };
   }
 
-  resetNewUser() {
-    return this.stopLobsterMode();
+  resetNewUser({ skipSandboxCleanup = false } = {}) {
+    if (!skipSandboxCleanup) return this.stopLobsterMode();
+    const orphanedSandboxId = this.#status.sandboxId;
+    return this.#clearLocalState({
+      cleanupSkipped: true,
+      orphanedSandboxId,
+    });
   }
 
   async sendMessage(text) {

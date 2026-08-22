@@ -234,9 +234,11 @@ test("session reset returns the BFF to new-user state and clears Sandbox Service
   assert.equal(monitor.snapshot().calls.length, 1);
 
   let resetCalls = 0;
+  let resetOptions;
   const controller = createController();
-  controller.resetNewUser = async () => {
+  controller.resetNewUser = async (options) => {
     resetCalls += 1;
+    resetOptions = options;
     return {
       mode: "idle",
       currentStep: "mode",
@@ -256,10 +258,15 @@ test("session reset returns the BFF to new-user state and clears Sandbox Service
 
   const reset = await fetch(`${app.url}/api/session/reset`, {
     method: "POST",
-    headers: { "x-onyxclaw-request": "local-ui" },
+    headers: {
+      "content-type": "application/json",
+      "x-onyxclaw-request": "local-ui",
+    },
+    body: JSON.stringify({ skipSandboxCleanup: true }),
   }).then((response) => response.json());
 
   assert.equal(resetCalls, 1);
+  assert.deepEqual(resetOptions, { skipSandboxCleanup: true });
   assert.equal(reset.mode, "idle");
   assert.equal(reset.soulConfirmed, false);
   assert.deepEqual(monitor.snapshot().calls, []);
@@ -285,6 +292,7 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.match(html, /性格设定/);
   assert.match(html, /对话龙虾/);
   assert.match(html, /id="reset-user"/);
+  assert.match(html, /id="skip-reset"/);
   assert.match(html, /确认性格并继续/);
   assert.match(html, /data-step="soul"/);
   assert.doesNotMatch(html, /class="tab[^>]*>\s*<b>\d+<\/b>/);
@@ -348,6 +356,7 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.doesNotMatch(browserApp, /metricConnection/);
   // The single reset button handles enter + stop + reset
   assert.match(browserApp, /async function disconnectAndReset/);
+  assert.match(browserApp, /skipSandboxCleanup/);
   assert.match(browserApp, /async function enterLobsterMode/);
   assert.match(browserApp, /clearApiCallsUi/);
   assert.match(browserApp, /resolveTabState/);

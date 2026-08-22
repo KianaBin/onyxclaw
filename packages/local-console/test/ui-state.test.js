@@ -66,3 +66,18 @@ test("personality remains the only forward step before confirmation", () => {
     },
   );
 });
+
+test("resumed users must confirm the SOUL read from persistent storage", () => {
+  assert.deepEqual(
+    resolveTabState({
+      mode: "resume-confirmation",
+      currentStep: "soul",
+      soulConfirmed: false,
+    }),
+    {
+      mode: { enabled: true, hidden: false },
+      soul: { enabled: true, hidden: false },
+      chat: { enabled: false, hidden: false },
+    },
+  );
+});

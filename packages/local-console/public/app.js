@@ -55,6 +55,7 @@ const elements = {
   chatInput: document.querySelector("#chat-input"),
   send: document.querySelector(".send-button"),
   resetUser: document.querySelector("#reset-user"),
+  skipReset: document.querySelector("#skip-reset"),
   resourceGrid: document.querySelector("#resource-grid"),
   objectsCount: document.querySelector("#objects-count"),
   apiCallList: document.querySelector("#api-call-list"),
@@ -142,6 +143,7 @@ function renderStatus(status) {
     pausing: "正在暂停 Sandbox…",
     paused: "Sandbox 已暂停",
     resuming: "正在恢复 Sandbox…",
+    "resume-confirmation": "已读取持久化性格，等待确认",
     error: "连接异常",
   };
   elements.status.className = `status-pill ${status.mode}`;
@@ -459,36 +461,37 @@ async function enterLobsterMode() {
   }
 }
 
-async function disconnectAndReset() {
+async function disconnectAndReset({ skipSandboxCleanup = false } = {}) {
   elements.resetUser.disabled = true;
-  notice(elements.modeNotice, uiConfig.deploymentMode === "cloud"
-    ? "正在清理云端 Sandbox 和 Channel 连接…"
+  elements.skipReset.disabled = true;
+  initialLanding = false;
+  showStep("mode");
+  notice(elements.modeNotice, skipSandboxCleanup
+    ? "正在跳过 Sandbox 清理并重置本地用户状态…"
+    : uiConfig.deploymentMode === "cloud"
+      ? "正在清理云端 Sandbox 和 Channel 连接…"
     : "正在禁用测试 Channel 并清理连接…");
   try {
-    if (await needsStop()) {
-      renderStatus(await api("/api/lobster/stop", { method: "POST" }));
-    }
-    const status = await api("/api/session/reset", { method: "POST" });
+    const status = await api("/api/session/reset", {
+      method: "POST",
+      body: JSON.stringify({ skipSandboxCleanup }),
+    });
     helloShown = false;
     helloLoading = false;
     initialLanding = true;
     resetChatView();
     clearApiCallsUi();
     renderStatus(status);
-    notice(elements.modeNotice, "已清理连接和会话状态，现在按全新用户流程开始。");
+    elements.skipReset.hidden = true;
+    notice(elements.modeNotice, status.cleanupSkipped
+      ? `已跳过旧 Sandbox 清理并重置用户。遗留 Sandbox：${status.orphanedSandboxId || "未知"}，请稍后手动清理。`
+      : "已清理连接和会话状态，现在按全新用户流程开始。");
   } catch (error) {
     notice(elements.modeNotice, `重置失败：${error.message}`, true);
+    elements.skipReset.hidden = false;
   } finally {
     elements.resetUser.disabled = false;
-  }
-}
-
-async function needsStop() {
-  try {
-    const current = await api("/api/status");
-    return ["connected", "allocated", "paused", "pausing", "resuming"].includes(current.mode);
-  } catch {
-    return false;
+    elements.skipReset.disabled = false;
   }
 }
 
@@ -506,6 +509,10 @@ elements.resetUser.addEventListener("click", async () => {
   } else {
     await disconnectAndReset();
   }
+});
+
+elements.skipReset.addEventListener("click", async () => {
+  await disconnectAndReset({ skipSandboxCleanup: true });
 });
 
 // The big CTA inside the phone only triggers when no sandbox exists yet.
@@ -533,11 +540,13 @@ elements.pauseSandbox.addEventListener("click", async () => {
 
 elements.resumeSandbox.addEventListener("click", async () => {
   elements.resumeSandbox.disabled = true;
-  elements.chatState.textContent = "正在恢复并重新执行 bootstrap…";
+  elements.chatState.textContent = "正在恢复并读取持久化 SOUL.md…";
   try {
     const status = await api("/api/lobster/resume", { method: "POST" });
+    initialLanding = false;
     renderStatus(status);
-    elements.chatState.textContent = "已恢复 · 可以发送";
+    notice(elements.soulNotice, "已从 SFS Turbo 挂载的 workspace/SOUL.md 读取内容，请确认是否写入并继续 bootstrap。");
+    elements.chatState.textContent = "等待确认持久化性格";
   } catch (error) {
     notice(elements.modeNotice, `恢复失败：${error.message}`, true);
     await refreshStatus();

@@ -97,7 +97,10 @@ export function createLocalConsoleServer({
       return sendJson(response, 200, await controller.resumeLobsterMode());
     }
     if (request.method === "POST" && pathname === "/api/session/reset") {
-      const status = await controller.resetNewUser();
+      const body = await readJson(request);
+      const status = await controller.resetNewUser({
+        skipSandboxCleanup: body.skipSandboxCleanup === true,
+      });
       operationMonitor.reset();
       return sendJson(response, 200, status);
     }

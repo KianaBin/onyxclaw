@@ -30,6 +30,14 @@ function fixture() {
       calls.push(["bootstrap", options]);
       return { ...options, connectionId: "connection-1", status: "ready" };
     },
+    async readPersistentSoul(sandboxId) {
+      calls.push(["read-soul", sandboxId]);
+      return {
+        content: "# Soul restored from SFS Turbo",
+        size: 30,
+        sha256: "persistent-hash",
+      };
+    },
   };
   const controller = new CloudConsoleController({
     adapter,
@@ -105,7 +113,7 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
   assert.equal(status.mode, "connected");
 });
 
-test("pause and resume use the E2B lifecycle and bootstrap the persistent workspace again", async () => {
+test("resume reads persistent SOUL and waits for confirmation before bootstrap", async () => {
   const { calls, controller } = fixture();
   await controller.startLobsterMode();
   await controller.confirmSoul("# Persistent lobster");
@@ -115,14 +123,27 @@ test("pause and resume use the E2B lifecycle and bootstrap the persistent worksp
   assert.equal(paused.connectionId, null);
 
   const resumed = await controller.resumeLobsterMode();
-  assert.equal(resumed.mode, "connected");
-  assert.equal(resumed.connectionId, "connection-1");
+  assert.equal(resumed.mode, "resume-confirmation");
+  assert.equal(resumed.currentStep, "soul");
+  assert.equal(resumed.soulConfirmed, false);
+  assert.equal(resumed.connectionId, null);
+  assert.equal(controller.getSoul().content, "# Soul restored from SFS Turbo");
   assert.deepEqual(calls.slice(-3).map(([name]) => name), [
     "pause",
     "connect",
+    "read-soul",
+  ]);
+
+  await controller.confirmSoul("# Confirmed persistent soul");
+  assert.equal(controller.getStatus().mode, "connected");
+  assert.deepEqual(calls.slice(-4).map(([name]) => name), [
+    "pause",
+    "connect",
+    "read-soul",
     "bootstrap",
   ]);
-  assert.equal(calls.at(-1)[1].soul, "# Persistent lobster");
+  assert.equal(calls.at(-1)[1].soul, "# Confirmed persistent soul");
+  assert.equal(calls.at(-1)[1].cleanupOnFailure, false);
 });
 
 test("a failed resume remains paused so the user can retry connect", async () => {
@@ -144,6 +165,9 @@ test("a failed resume remains paused so the user can retry connect", async () =>
       async bootstrapSandbox() {
         return { connectionId: "connection-2" };
       },
+      async readPersistentSoul() {
+        return { content: "# Retry lobster", size: 15, sha256: "hash" };
+      },
     },
     buildConfig: () => ({}),
   });
@@ -156,8 +180,10 @@ test("a failed resume remains paused so the user can retry connect", async () =>
   assert.equal(controller.getStatus().connectionId, null);
 
   const resumed = await controller.resumeLobsterMode();
-  assert.equal(resumed.mode, "connected");
-  assert.equal(resumed.connectionId, "connection-2");
+  assert.equal(resumed.mode, "resume-confirmation");
+  await controller.confirmSoul(controller.getSoul().content);
+  assert.equal(controller.getStatus().mode, "connected");
+  assert.equal(controller.getStatus().connectionId, "connection-2");
 });
 
 test("stop kills the cloud Sandbox and resets the serial flow", async () => {
@@ -181,4 +207,16 @@ test("resetNewUser uses cloud cleanup and returns to onboarding", async () => {
   assert.equal(reset.currentStep, "mode");
   assert.equal(reset.soulConfirmed, false);
   assert.deepEqual(calls.at(-1), ["kill", "sandbox-1"]);
+});
+
+test("resetNewUser can abandon an undeletable Sandbox and continue onboarding", async () => {
+  const { calls, controller } = fixture();
+  await controller.startLobsterMode();
+
+  const reset = await controller.resetNewUser({ skipSandboxCleanup: true });
+
+  assert.equal(reset.mode, "idle");
+  assert.equal(reset.cleanupSkipped, true);
+  assert.equal(reset.orphanedSandboxId, "sandbox-1");
+  assert.equal(calls.some(([name]) => name === "kill"), false);
 });

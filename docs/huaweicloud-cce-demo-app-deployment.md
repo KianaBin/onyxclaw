@@ -314,6 +314,26 @@ DeepSeek 的 OpenClaw 基础配置示例位于 [`deploy/huaweicloud-cce/openclaw
 
 控制面路由配置已经完整。当前还没有可用于探测的 Sandbox 实例；创建 Sandbox 后仍需从 CCE Pod 探测其私网 IP/服务端口，并从 Sandbox 到 `192.168.2.13:18890` 验证 WebSocket `101`，作为最终数据面证据。CCE NodePort 当前对 `0.0.0.0/0` 开放整个 `30000-32767`，联调可用但范围偏大，正式环境应收敛到 Sandbox CIDR。
 
+## 用户重置与恢复确认流程
+
+页面执行“重置新用户”时，后端默认先调用 `Sandbox.kill`。如果 AgentSphere 无法删除旧
+Sandbox，页面会保留原会话状态、展示删除错误，并提供“跳过 Sandbox 清理并重置”按钮。
+用户选择跳过后，APP 只清理本地 controller、Channel 问候缓存和页面遥测状态，返回遗留的
+Sandbox ID 供后续手工清理；该操作不会再次调用 `Sandbox.kill`。
+
+暂停 Sandbox 后点击恢复，流程调整为：
+
+1. 使用 E2B API Key 调用 `Sandbox.connect`；
+2. 通过新的数据面 session 读取挂载路径
+   `/home/node/.openclaw/workspace/SOUL.md`；
+3. 页面进入“等待确认”状态，展示读取到的完整内容、大小和 SHA-256；
+4. 用户可以编辑、恢复为本次读取版本，或确认继续；
+5. 仅在确认后写回 `SOUL.md`，等待 Gateway 健康和 Channel 回连，完成 bootstrap。
+
+因此恢复按钮本身不再覆盖持久化 SOUL。若读取或确认后的 bootstrap 失败，APP 会尽力重新
+暂停 Sandbox，并保留重试入口。当前 AgentSphere 控制面若在 `Sandbox.connect` 阶段直接
+失败，则还未建立数据面 session，也不会尝试读取文件或执行 bootstrap。
+
 ## 访问与验证
 
 若节点安全组已允许 TCP `30080`，可访问：

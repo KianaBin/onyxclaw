@@ -66,7 +66,8 @@ button { color: inherit; }
 .status-pill > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .status-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: #a9b0ae; }
 .status-pill.connected .status-dot { background: #28a775; box-shadow: 0 0 0 3px rgba(40,167,117,.12); }
-.status-pill.starting .status-dot, .status-pill.allocated .status-dot { background: #d89b27; animation: breathe 1s infinite; }
+.status-pill.starting .status-dot, .status-pill.allocated .status-dot,
+.status-pill.resuming .status-dot, .status-pill.resume-confirmation .status-dot { background: #d89b27; animation: breathe 1s infinite; }
 .status-pill.error .status-dot { background: var(--coral); }
 .reset-user { flex: 0 0 auto; border: 1px solid rgba(20,32,31,.12); border-radius: 999px; padding: 7px 11px; color: #18312d; background: rgba(255,255,255,.78); cursor: pointer; font-size: 9px; font-weight: 800; letter-spacing: .02em; }
 .reset-user:hover:not(:disabled) { color: white; background: var(--coral); border-color: var(--coral); }
@@ -113,6 +114,8 @@ h1 em { color: var(--coral); font-weight: 500; }
 .lobster-cta:disabled { opacity: .55; cursor: wait; box-shadow: none; }
 .notice { margin: 12px 0 0; padding: 8px 11px; border-radius: 10px; color: #256c5c; background: rgba(112,219,186,.16); font-size: 10px; line-height: 1.45; }
 .notice.error { color: #a63728; background: rgba(240,100,73,.13); }
+#skip-reset { width: 100%; margin-top: 10px; }
+#skip-reset[hidden] { display: none; }
 
 .mobile-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .mobile-panel-head h2 { margin: 0; font: 500 25px Georgia, "Songti SC", serif; }

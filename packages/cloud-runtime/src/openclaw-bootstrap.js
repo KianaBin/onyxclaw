@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 const DEFAULT_CONFIG_PATH = "/home/node/.openclaw/openclaw.json";
 const DEFAULT_WORKSPACE_DIR = "/home/node/.openclaw/workspace";
@@ -148,6 +148,24 @@ export class OpenClawBootstrapSaga {
       });
       throw new BootstrapError(phase);
     }
+  }
+
+  async readPersistentSoul(sandboxId) {
+    if (typeof sandboxId !== "string" || !sandboxId) {
+      throw new TypeError("sandboxId is required");
+    }
+    const content = await this.#adapter.readFile(
+      sandboxId,
+      `${this.#workspaceDir}/SOUL.md`,
+    );
+    if (typeof content !== "string") {
+      throw new TypeError("SOUL.md content must be a string");
+    }
+    return {
+      content,
+      size: Buffer.byteLength(content),
+      sha256: createHash("sha256").update(content).digest("hex"),
+    };
   }
 
   async bootstrapSandbox({

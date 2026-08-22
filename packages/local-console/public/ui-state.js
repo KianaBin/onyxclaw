@@ -8,7 +8,8 @@ export function resolveTabState(status) {
   const soulConfirmed = Boolean(status?.soulConfirmed);
   const connected = status?.mode === "connected";
   const paused = status?.mode === "paused";
-  const personalityReady = status?.mode === "allocated" || connected || paused;
+  const resumeConfirmation = status?.mode === "resume-confirmation";
+  const personalityReady = status?.mode === "allocated" || connected || paused || resumeConfirmation;
   return {
     mode: { enabled: true, hidden: false },
     soul: { enabled: personalityReady && !soulConfirmed, hidden: soulConfirmed },

@@ -17,6 +17,10 @@ function fixture({ writeFailure } = {}) {
       calls.push(["write", sandboxId, path, content]);
       if (writeFailure) throw writeFailure;
     },
+    async readFile(sandboxId, path) {
+      calls.push(["read", sandboxId, path]);
+      return "# Persisted soul\n";
+    },
     async killSandbox(sandboxId) {
       calls.push(["kill", sandboxId]);
     },
@@ -189,4 +193,19 @@ test("prepares an allocated Sandbox by writing only openclaw.json", async () => 
   assert.equal(writes.length, 1);
   assert.equal(writes[0][2], "/home/node/.openclaw/openclaw.json");
   assert.doesNotMatch(writes[0][3], /SOUL/);
+});
+
+test("reads the persisted SOUL from the mounted workspace before resume bootstrap", async () => {
+  const { calls, saga } = fixture();
+
+  const file = await saga.readPersistentSoul("resumed-sandbox");
+
+  assert.equal(file.content, "# Persisted soul\n");
+  assert.equal(file.size, Buffer.byteLength("# Persisted soul\n"));
+  assert.match(file.sha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(calls, [[
+    "read",
+    "resumed-sandbox",
+    "/home/node/.openclaw/workspace/SOUL.md",
+  ]]);
 });
