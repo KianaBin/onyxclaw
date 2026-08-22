@@ -181,7 +181,7 @@ export class CloudConsoleController {
     } catch (error) {
       this.#status = {
         ...this.#status,
-        mode: "error",
+        mode: "connected",
         error: error instanceof Error ? error.message : String(error),
       };
       throw error;
@@ -212,7 +212,8 @@ export class CloudConsoleController {
     } catch (error) {
       this.#status = {
         ...this.#status,
-        mode: "error",
+        mode: "paused",
+        connectionId: null,
         error: error instanceof Error ? error.message : String(error),
       };
       throw error;

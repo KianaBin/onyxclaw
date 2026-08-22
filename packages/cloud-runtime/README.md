@@ -32,3 +32,8 @@ APP 为每个 Sandbox 生成独立的配置对象，直接写入
 Sandbox metadata 挂载到持久存储。暂停会调用 E2B `Sandbox.pause` 并丢弃旧 SDK
 session；恢复调用 `Sandbox.connect` 获取新控制面和数据面凭据，再执行只包含
 `SOUL.md` 写入、Gateway ready 和 Channel 回连等待的 bootstrap 阶段。
+
+控制面与数据面鉴权严格分离：`create/connect/pause/kill` 只使用 E2B API Key；
+`connect` 成功后返回的新 `traffic_access_token` 只注入该 Sandbox 的 envd
+Files、Commands 和健康检查请求。控制面 `connect` 遇到临时 `401/403` 会有限重试；
+若最终失败，页面保持 `paused`，允许用户再次点击恢复。

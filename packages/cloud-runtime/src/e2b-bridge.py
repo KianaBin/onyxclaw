@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+import time
 from urllib.parse import urlparse
 
 
@@ -34,16 +35,13 @@ route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
 
 
-def api_options():
-    """Keep the SDK from deriving https://api.<domain> for compatible providers."""
-    options = {
+def control_api_options():
+    """Authenticate control-plane calls only with the configured E2B API key."""
+    return {
         "api_key": api_key,
         "api_url": api_url,
         "domain": api_domain,
     }
-    if sandbox_url:
-        options["sandbox_url"] = sandbox_url
-    return options
 
 
 def safe_error(error):
@@ -104,9 +102,22 @@ def routed(session):
     )
 
 
-def connect_session(sandbox_id, refresh=False):
+def connect_session(sandbox_id, refresh=False, max_attempts=4):
     if refresh or sandbox_id not in sessions:
-        claimed = Sandbox.connect(sandbox_id, **api_options())
+        for attempt in range(max_attempts):
+            try:
+                # Do not pass sandbox_url, traffic_access_token, or data-plane
+                # headers to the control-plane connect endpoint.
+                claimed = Sandbox.connect(
+                    sandbox_id,
+                    **control_api_options(),
+                )
+                break
+            except Exception as error:
+                status = getattr(error, "status_code", None) or getattr(error, "status", None)
+                if status not in (401, 403) or attempt + 1 >= max_attempts:
+                    raise
+                time.sleep(attempt + 1)
         sessions[sandbox_id] = (claimed, routed(claimed))
     return sessions[sandbox_id]
 
@@ -120,7 +131,7 @@ def dispatch(op, params):
             envs=params.get("envs"),
             secure=params.get("secure", True),
             lifecycle={"on_timeout": params.get("onTimeout", "kill")},
-            **api_options(),
+            **control_api_options(),
         )
         sessions[claimed.sandbox_id] = (claimed, routed(claimed))
         return {"sandboxId": claimed.sandbox_id}

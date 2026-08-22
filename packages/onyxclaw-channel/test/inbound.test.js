@@ -57,3 +57,50 @@ test("dispatchInboundEvent routes a direct message and delivers the agent reply"
   assert.equal(delivered[0].text, "pong");
   assert.equal(delivered[0].inReplyTo, "in-1");
 });
+
+test("dispatchInboundEvent returns an actionable reply when model generation fails", async () => {
+  const delivered = [];
+  const logs = [];
+  const runtime = {
+    routing: {
+      resolveAgentRoute: () => ({
+        agentId: "main",
+        accountId: "default",
+        sessionKey: "agent:main:onyxclaw:direct:phase0",
+      }),
+    },
+    reply: {
+      formatAgentEnvelope: ({ body }) => body,
+      resolveEnvelopeFormatOptions: () => ({}),
+      dispatchReplyWithBufferedBlockDispatcher: () => {},
+    },
+    inbound: {
+      buildContext: (input) => input,
+      async run() {
+        throw new Error("model endpoint unavailable");
+      },
+    },
+    session: {
+      resolveStorePath: () => "/tmp/session.json",
+      recordInboundSession: () => {},
+    },
+  };
+
+  await dispatchInboundEvent({
+    event: {
+      eventId: "in-failed",
+      timestamp: "2026-07-18T00:00:00.000Z",
+      payload: { senderId: "tester", chatId: "phase0", text: "hello" },
+    },
+    accountId: "default",
+    cfg: {},
+    channelRuntime: runtime,
+    deliver: async (reply) => delivered.push(reply),
+    log: { error: (message) => logs.push(message) },
+  });
+
+  assert.equal(delivered.length, 1);
+  assert.match(delivered[0].text, /模型服务/);
+  assert.equal(delivered[0].inReplyTo, "in-failed");
+  assert.match(logs[0], /model endpoint unavailable/);
+});

@@ -88,12 +88,12 @@ spec:
         app.kubernetes.io/name: onyxclaw-app
         app.kubernetes.io/version: "0.3.8"
       annotations:
-        onyxclaw.io/config-revision: "2026-08-22-sfs-lifecycle-template-4b437fde"
+        onyxclaw.io/config-revision: "2026-08-22-connect-auth-fix-template-4b437fde"
     spec:
       automountServiceAccountToken: false
       containers:
         - name: app
-          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-sfs-lifecycle@sha256:7f1a7d5dd716f8b499da45457a097e05d253af1f03dd921f0689ad8db550ba8b
+          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-connect-auth-fix@sha256:315b3ae0674f000dd01c2349fede6447e9479075e4941c732c87623c8060a5cf
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

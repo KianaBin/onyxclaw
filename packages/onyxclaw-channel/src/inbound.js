@@ -51,52 +51,61 @@ export async function dispatchInboundEvent({
     agentId: route.agentId,
   });
 
-  await channelRuntime.inbound.run({
-    channel: "onyxclaw",
-    accountId: route.accountId,
-    raw: event,
-    adapter: {
-      ingest: () => ({
-        id: event.eventId,
-        timestamp,
-        rawText: text,
-        textForAgent: text,
-        textForCommands: text,
-        raw: event,
-      }),
-      resolveTurn: () => ({
-        cfg,
-        channel: "onyxclaw",
-        accountId: route.accountId,
-        agentId: route.agentId,
-        routeSessionKey: route.sessionKey,
-        storePath,
-        ctxPayload,
-        recordInboundSession: channelRuntime.session.recordInboundSession,
-        dispatchReplyWithBufferedBlockDispatcher:
-          channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher,
-        delivery: {
-          durable: () => ({ to: `onyxclaw:${chatId}` }),
-          deliver: async (payload) => {
-            if (!payload.text) return { visibleReplySent: false };
-            await deliver({
-              text: payload.text,
-              chatId,
-              inReplyTo: event.eventId,
-            });
-            return { visibleReplySent: true };
+  try {
+    await channelRuntime.inbound.run({
+      channel: "onyxclaw",
+      accountId: route.accountId,
+      raw: event,
+      adapter: {
+        ingest: () => ({
+          id: event.eventId,
+          timestamp,
+          rawText: text,
+          textForAgent: text,
+          textForCommands: text,
+          raw: event,
+        }),
+        resolveTurn: () => ({
+          cfg,
+          channel: "onyxclaw",
+          accountId: route.accountId,
+          agentId: route.agentId,
+          routeSessionKey: route.sessionKey,
+          storePath,
+          ctxPayload,
+          recordInboundSession: channelRuntime.session.recordInboundSession,
+          dispatchReplyWithBufferedBlockDispatcher:
+            channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher,
+          delivery: {
+            durable: () => ({ to: `onyxclaw:${chatId}` }),
+            deliver: async (payload) => {
+              if (!payload.text) return { visibleReplySent: false };
+              await deliver({
+                text: payload.text,
+                chatId,
+                inReplyTo: event.eventId,
+              });
+              return { visibleReplySent: true };
+            },
+            onError: (error, info) => {
+              log?.error?.(`OnyxClaw ${info.kind} reply failed: ${String(error)}`);
+            },
           },
-          onError: (error, info) => {
-            log?.error?.(`OnyxClaw ${info.kind} reply failed: ${String(error)}`);
+          replyPipeline: {},
+          record: {
+            onRecordError: (error) => {
+              log?.error?.(`OnyxClaw session record failed: ${String(error)}`);
+            },
           },
-        },
-        replyPipeline: {},
-        record: {
-          onRecordError: (error) => {
-            log?.error?.(`OnyxClaw session record failed: ${String(error)}`);
-          },
-        },
-      }),
-    },
-  });
+        }),
+      },
+    });
+  } catch (error) {
+    log?.error?.(`OnyxClaw inbound generation failed: ${String(error)}`);
+    await deliver({
+      text: "OpenClaw 生成回复失败，请检查 Sandbox 到模型服务的网络和模型配置。",
+      chatId,
+      inReplyTo: event.eventId,
+    });
+  }
 }

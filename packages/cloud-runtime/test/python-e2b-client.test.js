@@ -149,7 +149,7 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.ok(source.indexOf("patch_e2b(") < source.indexOf("from e2b import Sandbox"));
   assert.match(source, /os\.environ\["E2B_API_URL"\] = api_url/);
   assert.match(source, /"api_url": api_url/);
-  assert.match(source, /"sandbox_url"/);
+  assert.match(source, /sandbox_url=sandbox_url/);
   assert.match(source, /"E2B-Traffic-Access-Token"/);
   assert.match(source, /traffic_access_token/);
   assert.match(source, /"create"|op == "create"/);
@@ -160,6 +160,9 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /"kill"|op == "kill"/);
   assert.match(source, /"pause"|op == "pause"/);
   assert.match(source, /on_timeout/);
+  assert.match(source, /control_api_options/);
+  assert.match(source, /status not in \(401, 403\)/);
+  assert.match(source, /Do not pass sandbox_url/);
   assert.match(source, /"statusCode"/);
   assert.match(source, /"requestId"/);
   assert.doesNotMatch(source, /print\([^\n]*(E2B_API_KEY|api_key)/);

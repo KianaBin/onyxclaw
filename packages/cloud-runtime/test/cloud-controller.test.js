@@ -125,6 +125,41 @@ test("pause and resume use the E2B lifecycle and bootstrap the persistent worksp
   assert.equal(calls.at(-1)[1].soul, "# Persistent lobster");
 });
 
+test("a failed resume remains paused so the user can retry connect", async () => {
+  let connectAttempts = 0;
+  const controller = new CloudConsoleController({
+    adapter: {
+      async createSandbox() {
+        return { sandboxId: "sandbox-1" };
+      },
+      async pauseSandbox() {},
+      async connectSandbox() {
+        connectAttempts += 1;
+        if (connectAttempts === 1) throw new Error("temporary auth failure");
+        return { sandboxId: "sandbox-1" };
+      },
+    },
+    saga: {
+      async prepareSandbox() {},
+      async bootstrapSandbox() {
+        return { connectionId: "connection-2" };
+      },
+    },
+    buildConfig: () => ({}),
+  });
+  await controller.startLobsterMode();
+  await controller.confirmSoul("# Retry lobster");
+  await controller.pauseLobsterMode();
+
+  await assert.rejects(controller.resumeLobsterMode(), /temporary auth failure/);
+  assert.equal(controller.getStatus().mode, "paused");
+  assert.equal(controller.getStatus().connectionId, null);
+
+  const resumed = await controller.resumeLobsterMode();
+  assert.equal(resumed.mode, "connected");
+  assert.equal(resumed.connectionId, "connection-2");
+});
+
 test("stop kills the cloud Sandbox and resets the serial flow", async () => {
   const { calls, controller } = fixture();
   await controller.startLobsterMode();

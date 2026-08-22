@@ -10,8 +10,8 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-sfs-lifecycle`
-- 已核验镜像摘要：`sha256:7f1a7d5dd716f8b499da45457a097e05d253af1f03dd921f0689ad8db550ba8b`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-connect-auth-fix`
+- 已核验镜像摘要：`sha256:315b3ae0674f000dd01c2349fede6447e9479075e4941c732c87623c8060a5cf`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
 - Channel 私网 ELB：`192.168.2.13:18890`（后端 NodePort `192.168.2.246:31965`）
@@ -22,7 +22,7 @@
 
 - `Deployment/onyxclaw-app`：`1/1 Ready`、`1/1 Available`
 - APP Pod：`Running`、容器重启次数 `0`
-- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:7f1a7d5dd716f8b499da45457a097e05d253af1f03dd921f0689ad8db550ba8b`
+- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:315b3ae0674f000dd01c2349fede6447e9479075e4941c732c87623c8060a5cf`
 - `/api/status`：返回 `mode: idle`，健康检查通过
 - `/api/ui-config`：已确认 `deploymentMode: cloud`、`providerId: huaweicloud-agentsphere`、`region: cn-south-1`
 - 公网 NodePort：已从集群外验证 `http://113.45.154.231:30080` 可达
@@ -48,7 +48,7 @@ Channel Plugin 已在 CCE 节点的 `/home/hzp/channel` 构建完成，可作为
 - 生产依赖：`node_modules/ws@8.21.3`
 - 锁文件：`/home/hzp/channel/package-lock.json`
 - npm 包：`/home/hzp/channel/dist/onyxclaw-channel-0.1.0.tgz`
-- npm 包 SHA-256：`46e8dc40b12bf3d63a3c1ae25b9927118a32991f85e15ad86ad9cffbbffad92b`
+- npm 包 SHA-256：`dfdec781f50ba4b0c7317371fbae3c1175d41b7c702475542504667c3a99ca85`
 - `package-lock.json` SHA-256：`04740ab841da5d89bcf26ac890139060589f390f8310c8fd860e2d81fbd18848`
 
 节点没有安装全局 Node/npm。构建使用节点已缓存的 `onyxclaw-app:0.3.8` 容器内 Node `22.23.2` 和 npm `10.9.8` 完成，没有修改节点系统运行时。`npm ls --omit=dev --omit=peer` 和全部插件 JS 文件的 `node --check` 已通过，依赖审计结果为 0 个漏洞。
@@ -63,26 +63,26 @@ AgentSphere Endpoint 从节点解析到华为云 API Gateway 地址，HTTPS TLS 
 
 ## OpenClaw 派生镜像构建结果
 
-OpenClaw 派生镜像已在 CCE 节点使用 `/home/hzp/openclaw-image` 作为构建上下文完成构建并推送到 SWR。构建使用节点本地基础镜像 `openclaw:2026.5.28`，其镜像 ID 为 `sha256:20623962bd21c91584760ebe348e2d70393fd2280075a92e9d74be6e377681ec`，构建过程没有重新拉取 GHCR。
+OpenClaw 派生镜像已在 CCE 节点使用 `/home/hzp/openclaw-image` 作为构建上下文完成构建并推送到 SWR。构建使用节点本地基础镜像 `openclaw:2026.5.28`，其镜像 ID 为 `sha256:20623962bd21c91584760ebe348e2d70393fd2280075a92e9d74be6e377681ec`，构建过程没有重新拉取 GHCR。针对本轮对话超时问题，新 Channel 会捕获模型生成异常并立即向 APP 回传可操作的错误消息，避免 APP 等待 outbound 事件直到超时。
 
 镜像引用：
 
 ```text
-swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.8-sfs-lifecycle
+swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.8-channel-error-fix
 ```
 
 正式注册 AgentSphere Template 时建议使用不可变引用：
 
 ```text
-swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:d2790899ef5275a1cda49c4f45338c199a438b86912b12ff6c7d6a25283dac7f
+swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5
 ```
 
 构建结果：
 
-- 本地派生镜像 ID：`sha256:39142940d185`
-- SWR manifest digest：`sha256:d2790899ef5275a1cda49c4f45338c199a438b86912b12ff6c7d6a25283dac7f`
+- 本地派生镜像 ID：`sha256:d8c8b8081ce0b837484019cf79121d5682e1f12e0ca5d9b2c4e2858ce972b893`
+- SWR manifest digest：`sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5`
 - 平台：`linux/amd64`
-- 镜像大小：`1057055539` bytes
+- 镜像大小：`1057061492` bytes
 - 构建目录：`/home/hzp/openclaw-image`
 - Channel Plugin 来源：`/home/hzp/channel`
 - envd 来源：`/home/hzp/envd`
@@ -97,10 +97,10 @@ swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:d2790899ef52
 
 随后通过 `/opt/onyxclaw/bin/envd-healthcheck.sh` 检查 `http://127.0.0.1:49983/health` 是否返回 HTTP `204`。envd 就绪后，入口只等待最终路径 `/home/node/.openclaw/openclaw.json`；文件出现后立即以 `node` 用户启动监听 `18789` 的 OpenClaw Gateway，不再等待或复制 bootstrap 目录中的 `SOUL.md`。
 
-新派生镜像对应的 AgentSphere Template 已由用户在控制台重新创建，Template ID 为
-`4b437fde-0069-4738-a11b-c264c49b57a3`。当前 AgentSphere 不支持通过 API 更新或创建
-模板；此后每次修改 OpenClaw 派生镜像，都必须由用户基于新镜像重新创建模板，并把新
-Template ID 回填到 Provider Profile 后才能发放验证。
+当前配置中的 Template ID `4b437fde-0069-4738-a11b-c264c49b57a3` 仍对应上一版
+`0.3.8-sfs-lifecycle` 镜像。当前 AgentSphere 不支持通过 API 更新或创建模板；必须由用户
+基于新镜像摘要 `sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5`
+重新创建模板，并把新 Template ID 回填到 Provider Profile 后，才能验证本轮 Channel 修复。
 
 临时容器验收已确认：envd 进程存活、健康接口返回 `204`、Docker HEALTHCHECK 为 `healthy`、Channel Plugin 的 OpenClaw peer 链接有效，并且 bootstrap 目录存在。验收容器已删除，SWR 推送完成后节点已执行 `docker logout` 清除登录状态。
 
@@ -143,7 +143,7 @@ E2B `Sandbox.create`：
 2. prepare：立即把完整 `openclaw.json` 写到 `/home/node/.openclaw/openclaw.json`，触发 Gateway 启动；
 3. bootstrap：用户确认 SOUL 后只写 `/home/node/.openclaw/workspace/SOUL.md`，等待 Gateway 和 Channel；
 4. pause：页面调用 E2B `Sandbox.pause`；
-5. resume：页面调用 `Sandbox.connect` 获取新会话，再次执行 SOUL 写入和 Gateway/Channel 就绪等待。
+5. resume：页面以 E2B API Key 调用 `Sandbox.connect` 获取新会话和新的 traffic token，再次执行 SOUL 写入和 Gateway/Channel 就绪等待。
 
 SFS 仅挂载 workspace，因此会持久化 `SOUL.md` 和 workspace 中其他 Markdown 文件；包含模型
 和 Channel token 的 `openclaw.json` 仍留在 Sandbox 本地文件系统，不写入 SFS。
@@ -165,6 +165,16 @@ Agent Gateway 还要求每次 Sandbox 数据面请求携带创建/连接响应�
 `traffic_access_token`。修复后的 bridge 会将该值作为
 `E2B-Traffic-Access-Token` 请求头注入 envd 的 Files、Commands 和健康检查请求；E2B
 API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
+
+其中 `Sandbox.connect` 与 `create/pause/kill` 一样属于控制面：请求只携带 E2B API Key，
+绝不携带旧的 `traffic_access_token`，也不使用 Sandbox 数据面 URL。`connect` 成功后返回的
+新 `traffic_access_token` 才会注入新建的数据面 session。为应对 AgentSphere 控制面偶发的
+`401/403`，bridge 会执行有限退避重试；若仍失败，页面状态恢复为 `paused`，可以再次恢复，
+不会锁死到 `error` 状态。
+
+对话侧，Channel 现在会捕获 OpenClaw 模型生成异常并发送一条明确的 outbound 错误消息。
+因此模型网络或 Provider 配置异常时，APP 不再只显示
+`timed out waiting for next outbound event`；Sandbox 日志仍保留原始异常供继续诊断。
 
 ### 2026-08-22 历史真实端到端验收
 
