@@ -10,8 +10,8 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-soul-resume-reset`
-- APP 镜像 digest：`sha256:70c17528c9ceb5d914b201b3433908683c1b04586c0aeb96361752d9774879a3`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-control-retry`
+- APP 镜像 digest：`sha256:eca92ff2996b476c1109e85fe2b10a87384601434281fcaffdb315787df7c95c`
 - 已核验镜像摘要：`sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
@@ -177,8 +177,9 @@ API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 
 AgentSphere 的 `connect` 成功响应与 Agent Gateway 识别新 session 之间存在短暂传播窗口；
 这时第一个 envd 请求可能返回 `Session ID not found`。bridge 会仅针对这一明确的瞬时错误
-做有限退避重试。恢复阶段如果仍失败，不再沿用首次创建的销毁补偿；APP 会尽量把 Sandbox
-重新暂停并保留 `paused` 状态，避免误杀 Sandbox 导致恢复按钮不可重试。
+在 45 秒窗口内退避重试。若窗口结束后仍失败，APP 不再调用 pause，而是保留已经 connect
+成功的运行状态并进入 `resume-data-pending`；页面显示“重试恢复”，再次点击只重试数据面
+`Files.read`，不会再次调用 `Sandbox.connect`。
 
 对话侧，Channel 现在会捕获 OpenClaw 模型生成异常并发送一条明确的 outbound 错误消息。
 因此模型网络或 Provider 配置异常时，APP 不再只显示
@@ -255,6 +256,13 @@ Sandbox 后，问候在约 `5.7s` 内成功，普通对话在约 `2.8s` 内正�
 `500: agent gateway create sandbox failed ... status=400`。该错误与 SFS 权限和
 `openclaw.json` 无关，且发生在 `Sandbox.connect` 成功返回数据面 session 之前；当前仍需
 由 AgentSphere 侧排查暂停实例恢复时的 Gateway session 创建。
+
+后续使用 APP 镜像 `0.3.8-resume-control-retry` 验证时，新 Sandbox 的 create、配置/SOUL
+写入和 Gateway bootstrap 均成功，但 `Sandbox.pause` 连续四次返回
+`sandbox.auth.0001`，内层为 IAM `SYS.0401 invalid value provided for authorization header`，
+约 6.2 秒后失败，因此当次无法进入 resume。相同 E2B API Key 随后的 `Sandbox.kill` 重试
+成功，测试 Sandbox 已清理。这说明 APP 的控制面 API Key 传递和重试已生效，但 AgentSphere
+pause 接口的 IAM 交换仍存在独立不稳定性。
 
 当前 Channel ELB 没有配置 TLS，因此本次验证协议是私网 `ws://`，不是 `wss://`。
 若正式要求 WSS，需要为 ELB/网关配置可被 Sandbox 信任的域名证书，将
@@ -336,9 +344,10 @@ Commands 等 Sandbox 数据面访问使用，不参与 connect、pause 或 kill 
 4. 用户可以编辑、恢复为本次读取版本，或确认继续；
 5. 仅在确认后写回 `SOUL.md`，等待 Gateway 健康和 Channel 回连，完成 bootstrap。
 
-因此恢复按钮本身不再覆盖持久化 SOUL。若读取或确认后的 bootstrap 失败，APP 会尽力重新
-暂停 Sandbox，并保留重试入口。当前 AgentSphere 控制面若在 `Sandbox.connect` 阶段直接
-失败，则还未建立数据面 session，也不会尝试读取文件或执行 bootstrap。
+因此恢复按钮本身不再覆盖持久化 SOUL。若读取失败是 `Session ID not found`，APP 保持
+Sandbox 运行并提供只重试读取的入口；其他读取错误或确认后的 bootstrap 失败仍会尽力重新
+暂停 Sandbox。当前 AgentSphere 控制面若在 `Sandbox.connect` 阶段直接失败，则还未建立
+数据面 session，也不会尝试读取文件或执行 bootstrap。
 
 ## 访问与验证
 

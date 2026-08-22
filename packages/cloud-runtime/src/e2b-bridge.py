@@ -33,6 +33,9 @@ api_key = os.environ["E2B_API_KEY"]
 sandbox_url = os.environ.get("E2B_SANDBOX_URL")
 route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
+data_session_wait_seconds = max(
+    1.0, float(os.environ.get("E2B_DATA_SESSION_WAIT_SECONDS", "45"))
+)
 
 
 def control_api_options():
@@ -135,17 +138,21 @@ def connect_session(sandbox_id, refresh=False, max_attempts=4):
     return sessions[sandbox_id]
 
 
-def run_data_operation(operation, max_attempts=5):
+def run_data_operation(operation, wait_seconds=data_session_wait_seconds):
     """Wait for Agent Gateway to observe a newly connected Sandbox session."""
-    for attempt in range(max_attempts):
+    deadline = time.monotonic() + wait_seconds
+    delay_seconds = 1.0
+    while True:
         try:
             return operation()
         except Exception as error:
             message = str(error).lower()
             transient = "session id not found" in message
-            if not transient or attempt + 1 >= max_attempts:
+            remaining = deadline - time.monotonic()
+            if not transient or remaining <= 0:
                 raise
-            time.sleep(attempt + 1)
+            time.sleep(min(delay_seconds, remaining))
+            delay_seconds = min(delay_seconds * 2, 5.0)
 
 
 def dispatch(op, params):
@@ -197,11 +204,11 @@ def dispatch(op, params):
         )
         return {"content": content}
     if op == "kill":
-        claimed.kill()
+        run_control_operation(lambda: claimed.kill())
         sessions.pop(sandbox_id, None)
         return {"killed": True}
     if op == "pause":
-        claimed.pause()
+        run_control_operation(lambda: claimed.pause())
         sessions.pop(sandbox_id, None)
         return {"paused": True}
     raise ValueError("unsupported bridge operation")

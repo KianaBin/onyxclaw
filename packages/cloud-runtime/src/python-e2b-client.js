@@ -174,6 +174,8 @@ export function createPythonE2BClientFactory({
         ...process.env,
         E2B_API_KEY: apiKey,
         E2B_BASE_URL: baseUrl,
+        E2B_DATA_SESSION_WAIT_SECONDS:
+          process.env.E2B_DATA_SESSION_WAIT_SECONDS ?? "45",
         ...(sandboxUrl ? { E2B_SANDBOX_URL: sandboxUrl } : {}),
         E2B_SDK_PATCH: sdkPatch,
       },

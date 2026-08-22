@@ -81,6 +81,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
     fake.calls[0].options.env.E2B_SDK_PATCH,
     "kruise-agents-private-protocol",
   );
+  assert.equal(fake.calls[0].options.env.E2B_DATA_SESSION_WAIT_SECONDS, "45");
   assert.doesNotMatch(JSON.stringify(fake.requests), /runtime-secret/);
   assert.deepEqual(fake.requests.map(({ op }) => op), [
     "create",
@@ -164,9 +165,13 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /is_control_auth_error/);
   assert.match(source, /sandbox\.auth\.0001/);
   assert.match(source, /run_control_operation/);
+  assert.match(source, /run_control_operation\(lambda: claimed\.kill\(\)\)/);
+  assert.match(source, /run_control_operation\(lambda: claimed\.pause\(\)\)/);
   assert.match(source, /Do not pass sandbox_url/);
   assert.match(source, /run_data_operation/);
   assert.match(source, /session id not found/);
+  assert.match(source, /E2B_DATA_SESSION_WAIT_SECONDS/);
+  assert.match(source, /time\.monotonic/);
   assert.match(source, /"statusCode"/);
   assert.match(source, /"requestId"/);
   assert.doesNotMatch(source, /print\([^\n]*(E2B_API_KEY|api_key)/);

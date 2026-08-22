@@ -81,3 +81,14 @@ test("resumed users must confirm the SOUL read from persistent storage", () => {
     },
   );
 });
+
+test("a running resume with delayed data session keeps the chat step available for retry", () => {
+  const state = resolveTabState({
+    mode: "resume-data-pending",
+    currentStep: "chat",
+    soulConfirmed: true,
+  });
+
+  assert.equal(state.chat.enabled, true);
+  assert.equal(state.soul.hidden, true);
+});

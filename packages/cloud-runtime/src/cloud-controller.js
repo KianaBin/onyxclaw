@@ -10,6 +10,12 @@ function soulFile(content) {
   };
 }
 
+function isMissingDataSession(error) {
+  return (error instanceof Error ? error.message : String(error))
+    .toLowerCase()
+    .includes("session id not found");
+}
+
 export class CloudConsoleController {
   #adapter;
   #saga;
@@ -213,14 +219,17 @@ export class CloudConsoleController {
   }
 
   async resumeLobsterMode() {
-    if (this.#status.mode !== "paused" || !this.#status.sandboxId) {
+    const retryDataSession = this.#status.mode === "resume-data-pending";
+    if ((this.#status.mode !== "paused" && !retryDataSession) || !this.#status.sandboxId) {
       throw new Error("Sandbox 当前不是暂停状态");
     }
     this.#status = { ...this.#status, mode: "resuming", error: null };
-    let connectedForResume = false;
+    let connectedForResume = retryDataSession;
     try {
-      await this.#adapter.connectSandbox(this.#status.sandboxId);
-      connectedForResume = true;
+      if (!retryDataSession) {
+        await this.#adapter.connectSandbox(this.#status.sandboxId);
+        connectedForResume = true;
+      }
       const persistentSoul = await this.#saga.readPersistentSoul(
         this.#status.sandboxId,
       );
@@ -235,14 +244,17 @@ export class CloudConsoleController {
       };
       return this.getStatus();
     } catch (error) {
-      if (connectedForResume) {
+      const dataSessionPending = connectedForResume && isMissingDataSession(error);
+      if (connectedForResume && !dataSessionPending) {
         try {
           await this.#adapter.pauseSandbox(this.#status.sandboxId);
         } catch {}
       }
       this.#status = {
         ...this.#status,
-        mode: "paused",
+        mode: dataSessionPending ? "resume-data-pending" : "paused",
+        currentStep: "chat",
+        soulConfirmed: true,
         connectionId: null,
         error: error instanceof Error ? error.message : String(error),
       };

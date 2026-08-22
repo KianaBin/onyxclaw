@@ -186,6 +186,53 @@ test("a failed resume remains paused so the user can retry connect", async () =>
   assert.equal(controller.getStatus().connectionId, "connection-2");
 });
 
+test("missing resumed data session stays running and retries read without connect or pause", async () => {
+  const calls = [];
+  let readAttempts = 0;
+  const controller = new CloudConsoleController({
+    adapter: {
+      async createSandbox() {
+        return { sandboxId: "sandbox-1" };
+      },
+      async connectSandbox(id) {
+        calls.push(["connect", id]);
+      },
+      async pauseSandbox(id) {
+        calls.push(["pause", id]);
+      },
+    },
+    saga: {
+      async prepareSandbox() {},
+      async bootstrapSandbox() {
+        return { connectionId: "connection-3" };
+      },
+      async readPersistentSoul() {
+        readAttempts += 1;
+        calls.push(["read-soul", readAttempts]);
+        if (readAttempts === 1) throw new Error("Session ID not found");
+        return { content: "# Persistent", size: 12, sha256: "hash" };
+      },
+    },
+    buildConfig: () => ({}),
+  });
+  await controller.startLobsterMode();
+  await controller.confirmSoul("# Persistent");
+  await controller.pauseLobsterMode();
+
+  await assert.rejects(controller.resumeLobsterMode(), /Session ID not found/);
+  assert.equal(controller.getStatus().mode, "resume-data-pending");
+  assert.deepEqual(calls.map(([name]) => name), ["pause", "connect", "read-soul"]);
+
+  const retried = await controller.resumeLobsterMode();
+  assert.equal(retried.mode, "resume-confirmation");
+  assert.deepEqual(calls.map(([name]) => name), [
+    "pause",
+    "connect",
+    "read-soul",
+    "read-soul",
+  ]);
+});
+
 test("stop kills the cloud Sandbox and resets the serial flow", async () => {
   const { calls, controller } = fixture();
   await controller.startLobsterMode();

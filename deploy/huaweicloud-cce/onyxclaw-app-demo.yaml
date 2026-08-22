@@ -26,7 +26,7 @@ data:
             "apiKeyEnv": "HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY",
             "compatibilityVersion": "agentsphere-e2b-poc",
             "sdkPatch": "none",
-            "requestTimeoutMs": 30000
+            "requestTimeoutMs": 60000
           },
           "sandbox": {
             "templateId": "c4711224-04d5-4875-a934-47a4007db35e",
@@ -88,12 +88,12 @@ spec:
         app.kubernetes.io/name: onyxclaw-app
         app.kubernetes.io/version: "0.3.8"
       annotations:
-        onyxclaw.io/config-revision: "2026-08-22-soul-resume-reset-template-c4711224"
+        onyxclaw.io/config-revision: "2026-08-22-resume-control-retry-template-c4711224"
     spec:
       automountServiceAccountToken: false
       containers:
         - name: app
-          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-soul-resume-reset@sha256:70c17528c9ceb5d914b201b3433908683c1b04586c0aeb96361752d9774879a3
+          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-control-retry@sha256:eca92ff2996b476c1109e85fe2b10a87384601434281fcaffdb315787df7c95c
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -122,6 +122,8 @@ spec:
                 secretKeyRef:
                   name: onyxclaw-app-runtime
                   key: channel-signing-secret
+            - name: E2B_DATA_SESSION_WAIT_SECONDS
+              value: "45"
             - name: ONYXCLAW_OPENCLAW_BASE_CONFIG_JSON
               valueFrom:
                 secretKeyRef:

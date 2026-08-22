@@ -143,6 +143,7 @@ function renderStatus(status) {
     pausing: "正在暂停 Sandbox…",
     paused: "Sandbox 已暂停",
     resuming: "正在恢复 Sandbox…",
+    "resume-data-pending": "数据面尚未就绪，可重试恢复",
     "resume-confirmation": "已读取持久化性格，等待确认",
     error: "连接异常",
   };
@@ -163,8 +164,12 @@ function renderStatus(status) {
   elements.enterLobsterMode.textContent = busy ? "正在进入…" : "进入龙虾模式";
   elements.pauseSandbox.hidden = !pauseResume || status.mode !== "connected";
   elements.pauseSandbox.disabled = busy;
-  elements.resumeSandbox.hidden = !pauseResume || status.mode !== "paused";
+  elements.resumeSandbox.hidden = !pauseResume ||
+    !["paused", "resume-data-pending"].includes(status.mode);
   elements.resumeSandbox.disabled = busy;
+  elements.resumeSandbox.textContent = status.mode === "resume-data-pending"
+    ? "重试恢复"
+    : "恢复";
   elements.chatInput.disabled = !chatReady;
   elements.send.disabled = !chatReady;
   elements.chatState.textContent = chatReady ? "已连接 · 可以发送" : "等待完成设置";
