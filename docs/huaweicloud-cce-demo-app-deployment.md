@@ -244,6 +244,17 @@ UID/GID `1000:1000` 并赋予 owner 写权限，或在挂载初始化阶段用�
 目录权限会影响所有挂载该路径的 Sandbox，执行前需确认现有文件的权限策略和 SFS 是否启用
 root squash。
 
+用户调整 SFS 权限后再次验收：workspace 为 `node:node 0755`，`node` 用户可写；OpenClaw
+本地 agent 通过 `deepseek-v4-flash` 成功返回 `DEEPSEEK-DIAG-OK`。Demo APP 从零创建
+Sandbox 后，问候在约 `5.7s` 内成功，普通对话在约 `2.8s` 内正确返回
+`23×19 = 437` 和验证词 `SFS-PERM-OK`，确认 Files、Gateway、Channel 回连和 DeepSeek
+对话链路均已恢复。
+
+同一 Sandbox 的 pause 成功，但随后 resume 仍由 AgentSphere 控制面返回
+`500: agent gateway create sandbox failed ... status=400`。该错误与 SFS 权限和
+`openclaw.json` 无关，且发生在 `Sandbox.connect` 成功返回数据面 session 之前；当前仍需
+由 AgentSphere 侧排查暂停实例恢复时的 Gateway session 创建。
+
 当前 Channel ELB 没有配置 TLS，因此本次验证协议是私网 `ws://`，不是 `wss://`。
 若正式要求 WSS，需要为 ELB/网关配置可被 Sandbox 信任的域名证书，将
 `channel.publicUrl` 改为 `wss://<domain>/connect` 后再做一次握手验证。
