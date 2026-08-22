@@ -10,7 +10,8 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-control-retry-fix`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-soul-resume-reset`
+- APP 镜像 digest：`sha256:70c17528c9ceb5d914b201b3433908683c1b04586c0aeb96361752d9774879a3`
 - 已核验镜像摘要：`sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
@@ -320,6 +321,11 @@ DeepSeek 的 OpenClaw 基础配置示例位于 [`deploy/huaweicloud-cce/openclaw
 Sandbox，页面会保留原会话状态、展示删除错误，并提供“跳过 Sandbox 清理并重置”按钮。
 用户选择跳过后，APP 只清理本地 controller、Channel 问候缓存和页面遥测状态，返回遗留的
 Sandbox ID 供后续手工清理；该操作不会再次调用 `Sandbox.kill`。
+
+普通清理分支的 `Sandbox.kill` 使用 `HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY`：adapter 在没有
+缓存 session 时先用该 API Key 调用控制面 `Sandbox.connect`，再在原始 control-plane
+session 上执行 `kill()`。`traffic_access_token` 只注入 routed 数据面 session，供 Files 和
+Commands 等 Sandbox 数据面访问使用，不参与 connect、pause 或 kill 的控制面鉴权。
 
 暂停 Sandbox 后点击恢复，流程调整为：
 

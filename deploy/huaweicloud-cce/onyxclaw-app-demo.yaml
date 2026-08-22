@@ -88,12 +88,12 @@ spec:
         app.kubernetes.io/name: onyxclaw-app
         app.kubernetes.io/version: "0.3.8"
       annotations:
-        onyxclaw.io/config-revision: "2026-08-22-control-retry-template-c4711224"
+        onyxclaw.io/config-revision: "2026-08-22-soul-resume-reset-template-c4711224"
     spec:
       automountServiceAccountToken: false
       containers:
         - name: app
-          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-control-retry-fix@sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1
+          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-soul-resume-reset@sha256:70c17528c9ceb5d914b201b3433908683c1b04586c0aeb96361752d9774879a3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
