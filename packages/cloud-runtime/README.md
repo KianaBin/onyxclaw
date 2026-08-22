@@ -37,3 +37,9 @@ session；恢复调用 `Sandbox.connect` 获取新控制面和数据面凭据，
 `connect` 成功后返回的新 `traffic_access_token` 只注入该 Sandbox 的 envd
 Files、Commands 和健康检查请求。控制面 `connect` 遇到临时 `401/403` 会有限重试；
 若最终失败，页面保持 `paused`，允许用户再次点击恢复。
+
+`connect` 后 Agent Gateway 尚未识别新 session 时，envd 可能短暂返回
+`Session ID not found`；bridge 会对该错误有限退避重试。AgentSphere 有时把控制面 403
+只放在异常文本中，因此 `create/connect` 的鉴权重试会同时识别 HTTP 状态和
+`sandbox.auth.0001`。恢复 bootstrap 失败不会执行
+首次创建场景的 kill 补偿，Controller 会尽量重新暂停 Sandbox，保留后续重试能力。

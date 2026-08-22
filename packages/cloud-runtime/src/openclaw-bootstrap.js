@@ -150,7 +150,13 @@ export class OpenClawBootstrapSaga {
     }
   }
 
-  async bootstrapSandbox({ sandboxId, instanceId, traceId, soul }) {
+  async bootstrapSandbox({
+    sandboxId,
+    instanceId,
+    traceId,
+    soul,
+    cleanupOnFailure = true,
+  }) {
     this.#validateSoul(soul);
     if (typeof sandboxId !== "string" || !sandboxId) {
       throw new TypeError("sandboxId is required");
@@ -195,13 +201,15 @@ export class OpenClawBootstrapSaga {
       };
     } catch {
       const failedAtPhase = phase;
-      try {
-        await this.#channel.revokeBootstrapToken(instanceId);
-      } catch {}
-      if (sandboxId) {
+      if (cleanupOnFailure) {
         try {
-          await this.#adapter.killSandbox(sandboxId);
+          await this.#channel.revokeBootstrapToken(instanceId);
         } catch {}
+        if (sandboxId) {
+          try {
+            await this.#adapter.killSandbox(sandboxId);
+          } catch {}
+        }
       }
       this.#transition("FAILED", {
         sandboxId,

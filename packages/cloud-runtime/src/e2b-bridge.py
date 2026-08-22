@@ -102,36 +102,64 @@ def routed(session):
     )
 
 
+def is_control_auth_error(error):
+    status = getattr(error, "status_code", None) or getattr(error, "status", None)
+    if status in (401, 403):
+        return True
+    message = str(error).lower()
+    return "sandbox.auth.0001" in message or "apikey authentication failed" in message
+
+
+def run_control_operation(operation, max_attempts=4):
+    for attempt in range(max_attempts):
+        try:
+            return operation()
+        except Exception as error:
+            if not is_control_auth_error(error) or attempt + 1 >= max_attempts:
+                raise
+            time.sleep(attempt + 1)
+
+
 def connect_session(sandbox_id, refresh=False, max_attempts=4):
     if refresh or sandbox_id not in sessions:
-        for attempt in range(max_attempts):
-            try:
-                # Do not pass sandbox_url, traffic_access_token, or data-plane
-                # headers to the control-plane connect endpoint.
-                claimed = Sandbox.connect(
+        # Do not pass sandbox_url, traffic_access_token, or data-plane headers
+        # to the control-plane connect endpoint.
+        claimed = run_control_operation(
+            lambda: Sandbox.connect(
                     sandbox_id,
                     **control_api_options(),
-                )
-                break
-            except Exception as error:
-                status = getattr(error, "status_code", None) or getattr(error, "status", None)
-                if status not in (401, 403) or attempt + 1 >= max_attempts:
-                    raise
-                time.sleep(attempt + 1)
+            ),
+            max_attempts=max_attempts,
+        )
         sessions[sandbox_id] = (claimed, routed(claimed))
     return sessions[sandbox_id]
 
 
+def run_data_operation(operation, max_attempts=5):
+    """Wait for Agent Gateway to observe a newly connected Sandbox session."""
+    for attempt in range(max_attempts):
+        try:
+            return operation()
+        except Exception as error:
+            message = str(error).lower()
+            transient = "session id not found" in message
+            if not transient or attempt + 1 >= max_attempts:
+                raise
+            time.sleep(attempt + 1)
+
+
 def dispatch(op, params):
     if op == "create":
-        claimed = Sandbox.create(
-            template=params["template"],
-            timeout=params.get("timeoutSeconds", 300),
-            metadata=params.get("metadata"),
-            envs=params.get("envs"),
-            secure=params.get("secure", True),
-            lifecycle={"on_timeout": params.get("onTimeout", "kill")},
-            **control_api_options(),
+        claimed = run_control_operation(
+            lambda: Sandbox.create(
+                template=params["template"],
+                timeout=params.get("timeoutSeconds", 300),
+                metadata=params.get("metadata"),
+                envs=params.get("envs"),
+                secure=params.get("secure", True),
+                lifecycle={"on_timeout": params.get("onTimeout", "kill")},
+                **control_api_options(),
+            )
         )
         sessions[claimed.sandbox_id] = (claimed, routed(claimed))
         return {"sandboxId": claimed.sandbox_id}
@@ -142,9 +170,11 @@ def dispatch(op, params):
         return {"sandboxId": sandbox_id}
     claimed, session = connect_session(sandbox_id)
     if op == "command":
-        result = session.commands.run(
-            params["command"],
-            user=params.get("user"),
+        result = run_data_operation(
+            lambda: session.commands.run(
+                params["command"],
+                user=params.get("user"),
+            )
         )
         return {
             "exitCode": getattr(result, "exit_code", 0),
@@ -155,10 +185,16 @@ def dispatch(op, params):
         content = params["content"]
         if params.get("encoding") == "base64":
             content = base64.b64decode(content)
-        session.files.write(params["path"], content, user=params.get("user"))
+        run_data_operation(
+            lambda: session.files.write(
+                params["path"], content, user=params.get("user")
+            )
+        )
         return {"written": True}
     if op == "readFile":
-        content = session.files.read(params["path"], user=params.get("user"))
+        content = run_data_operation(
+            lambda: session.files.read(params["path"], user=params.get("user"))
+        )
         return {"content": content}
     if op == "kill":
         claimed.kill()

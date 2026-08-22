@@ -161,8 +161,12 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /"pause"|op == "pause"/);
   assert.match(source, /on_timeout/);
   assert.match(source, /control_api_options/);
-  assert.match(source, /status not in \(401, 403\)/);
+  assert.match(source, /is_control_auth_error/);
+  assert.match(source, /sandbox\.auth\.0001/);
+  assert.match(source, /run_control_operation/);
   assert.match(source, /Do not pass sandbox_url/);
+  assert.match(source, /run_data_operation/);
+  assert.match(source, /session id not found/);
   assert.match(source, /"statusCode"/);
   assert.match(source, /"requestId"/);
   assert.doesNotMatch(source, /print\([^\n]*(E2B_API_KEY|api_key)/);

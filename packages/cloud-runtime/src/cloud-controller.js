@@ -200,6 +200,7 @@ export class CloudConsoleController {
         instanceId: this.#status.instanceId,
         traceId: this.#status.traceId,
         soul: this.#soul,
+        cleanupOnFailure: false,
       });
       this.#status = {
         ...this.#status,
@@ -210,6 +211,9 @@ export class CloudConsoleController {
       };
       return this.getStatus();
     } catch (error) {
+      try {
+        await this.#adapter.pauseSandbox(this.#status.sandboxId);
+      } catch {}
       this.#status = {
         ...this.#status,
         mode: "paused",

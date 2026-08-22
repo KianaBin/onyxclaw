@@ -10,8 +10,8 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-connect-auth-fix`
-- 已核验镜像摘要：`sha256:315b3ae0674f000dd01c2349fede6447e9479075e4941c732c87623c8060a5cf`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-control-retry-fix`
+- 已核验镜像摘要：`sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
 - Channel 私网 ELB：`192.168.2.13:18890`（后端 NodePort `192.168.2.246:31965`）
@@ -22,7 +22,7 @@
 
 - `Deployment/onyxclaw-app`：`1/1 Ready`、`1/1 Available`
 - APP Pod：`Running`、容器重启次数 `0`
-- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:315b3ae0674f000dd01c2349fede6447e9479075e4941c732c87623c8060a5cf`
+- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1`
 - `/api/status`：返回 `mode: idle`，健康检查通过
 - `/api/ui-config`：已确认 `deploymentMode: cloud`、`providerId: huaweicloud-agentsphere`、`region: cn-south-1`
 - 公网 NodePort：已从集群外验证 `http://113.45.154.231:30080` 可达
@@ -97,10 +97,11 @@ swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:d29c37290298
 
 随后通过 `/opt/onyxclaw/bin/envd-healthcheck.sh` 检查 `http://127.0.0.1:49983/health` 是否返回 HTTP `204`。envd 就绪后，入口只等待最终路径 `/home/node/.openclaw/openclaw.json`；文件出现后立即以 `node` 用户启动监听 `18789` 的 OpenClaw Gateway，不再等待或复制 bootstrap 目录中的 `SOUL.md`。
 
-当前配置中的 Template ID `4b437fde-0069-4738-a11b-c264c49b57a3` 仍对应上一版
-`0.3.8-sfs-lifecycle` 镜像。当前 AgentSphere 不支持通过 API 更新或创建模板；必须由用户
-基于新镜像摘要 `sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5`
-重新创建模板，并把新 Template ID 回填到 Provider Profile 后，才能验证本轮 Channel 修复。
+新派生镜像已由用户在 AgentSphere 控制台创建为 Template
+`c4711224-04d5-4875-a934-47a4007db35e`，对应镜像摘要
+`sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5`。
+当前 AgentSphere 不支持通过 API 更新或创建模板；后续每次修改派生镜像仍需用户重新创建
+Template 并把新 ID 回填到 Provider Profile。
 
 临时容器验收已确认：envd 进程存活、健康接口返回 `204`、Docker HEALTHCHECK 为 `healthy`、Channel Plugin 的 OpenClaw peer 链接有效，并且 bootstrap 目录存在。验收容器已删除，SWR 推送完成后节点已执行 `docker logout` 清除登录状态。
 
@@ -113,7 +114,7 @@ Cloud APP 在进程启动时会校验 Provider Profile，并要求基础 OpenCla
 | Sandbox API | `https://agentsphere.cn-south-1.myhuaweicloud.com` | bridge 显式传入 `api_url`，不会再由 SDK 拼接 `api.` 前缀 |
 | Sandbox 数据面 | `https://agent-gateway-sandbox-muyden3dgi.agentgateway.cn-south-1.huaweicloud-agentnetwork.com` | 通过 `api.sandboxUrl` 映射为 SDK 的 `E2B_SANDBOX_URL`；DNS/TLS 可达 |
 | Channel 回连 URL | `ws://192.168.2.13:18890/connect` | ELB VIP 使用 Service port；API Key 恢复后需从 Sandbox 再验 WebSocket 回连 |
-| Sandbox Template | `4b437fde-0069-4738-a11b-c264c49b57a3` | 对应 `0.3.8-sfs-lifecycle` 派生镜像，尚需执行实际创建验收 |
+| Sandbox Template | `c4711224-04d5-4875-a934-47a4007db35e` | 对应 `0.3.8-channel-error-fix` 派生镜像 |
 | Model Provider / ID | `deepseek` / `deepseek-v4-flash` | Provider 已配置 |
 | E2B API Key | Kubernetes Secret 中的真实值 | 已配置，不写入 Git |
 | 模型 API Key | Kubernetes Secret 中的真实值 | 已配置，不写入 Git 或备份文件 |
@@ -169,8 +170,14 @@ API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 其中 `Sandbox.connect` 与 `create/pause/kill` 一样属于控制面：请求只携带 E2B API Key，
 绝不携带旧的 `traffic_access_token`，也不使用 Sandbox 数据面 URL。`connect` 成功后返回的
 新 `traffic_access_token` 才会注入新建的数据面 session。为应对 AgentSphere 控制面偶发的
-`401/403`，bridge 会执行有限退避重试；若仍失败，页面状态恢复为 `paused`，可以再次恢复，
+`401/403`，bridge 会执行有限退避重试；重试同时识别 SDK 的结构化状态和兼容层错误文本中的
+`sandbox.auth.0001`，并统一覆盖 `create/connect`。若仍失败，页面状态恢复为 `paused`，可以再次恢复，
 不会锁死到 `error` 状态。
+
+AgentSphere 的 `connect` 成功响应与 Agent Gateway 识别新 session 之间存在短暂传播窗口；
+这时第一个 envd 请求可能返回 `Session ID not found`。bridge 会仅针对这一明确的瞬时错误
+做有限退避重试。恢复阶段如果仍失败，不再沿用首次创建的销毁补偿；APP 会尽量把 Sandbox
+重新暂停并保留 `paused` 状态，避免误杀 Sandbox 导致恢复按钮不可重试。
 
 对话侧，Channel 现在会捕获 OpenClaw 模型生成异常并发送一条明确的 outbound 错误消息。
 因此模型网络或 Provider 配置异常时，APP 不再只显示
@@ -190,7 +197,26 @@ API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 5. 经 Channel 发送“计算 17×23，并附加验证口令 DS-E2E-OK”，配置的
    `deepseek/deepseek-v4-flash` 返回 `391` 和 `DS-E2E-OK`，对话耗时约 `5.8s`；
 6. 验收后 `Sandbox.kill` 成功，APP 回到 `mode=idle`，没有遗留运行中的测试
-   Sandbox。
+Sandbox。
+
+### 2026-08-22 当前修复验收
+
+使用 Template `c4711224-04d5-4875-a934-47a4007db35e` 实测结果：
+
+1. `Sandbox.create`、`openclaw.json` 写入、`SOUL.md` 写入、Gateway ready 和 Channel
+   回连均成功；
+2. 问候请求在 `277ms` 内收到 Channel 的模型失败 outbound，不再出现
+   `timed out waiting for next outbound event`。这证明超时处理已修复，但 DeepSeek 调用的
+   原始异常仍需从 Sandbox 日志确认；
+3. `Sandbox.pause` 成功；
+4. 恢复调用不再返回 API key authentication failed。SDK 调用和显式携带
+   `X-API-KEY` 的原始 `POST /sandboxes/{id}/connect` 都进入 AgentSphere 服务端，但均返回
+   HTTP `500: agent gateway create sandbox failed ... status=400`。因此当前恢复阻塞点是
+   AgentSphere 内部 Gateway session 创建，不是 APP 使用了 traffic token；
+5. APP 在失败后保持 `paused` 和原 Sandbox ID，未把页面锁死到 `error`。
+
+当前华为云控制台登录会话已过期。重新登录后，应在该 Sandbox 的事件/日志中继续检查
+Gateway `status=400` 的服务端原因，并读取 Channel 记录的 DeepSeek 原始异常。
 
 当前 Channel ELB 没有配置 TLS，因此本次验证协议是私网 `ws://`，不是 `wss://`。
 若正式要求 WSS，需要为 ELB/网关配置可被 Sandbox 信任的域名证书，将
@@ -280,7 +306,7 @@ curl -fsS http://113.45.154.231:30080/api/ui-config
 
 ## Sandbox 联调前必须配置
 
-1. 验证 AgentSphere Template `4b437fde-0069-4738-a11b-c264c49b57a3` 与当前派生镜像匹配，并确认 `defaultUser=node`、home/workspace 路径、OpenClaw 启动命令、envd 健康状态和 Gateway 端口 `18789`；派生镜像更新后需人工重新创建模板并替换此 ID。
+1. 验证 AgentSphere Template `c4711224-04d5-4875-a934-47a4007db35e` 与当前派生镜像匹配，并确认 `defaultUser=node`、home/workspace 路径、OpenClaw 启动命令、envd 健康状态和 Gateway 端口 `18789`；派生镜像更新后需人工重新创建模板并替换此 ID。
 2. 确认 Sandbox VPC 可以路由到 Channel 私网 ELB `192.168.2.13:18890`；正式环境建议配置私有域名和 TLS。
 3. 当前 APP 配置仍要求一个非空 Channel signing secret，但 v0.3.8 实际握手使用每个实例动态生成的 `bootstrapToken`；现有随机 Secret 可以保留，不需要手工写入 Template。若后续版本启用长期签名校验，再统一轮换 APP 与插件侧 Secret。
 4. 验证 Sandbox 到 `https://api.deepseek.com` 的 DNS、路由、安全组和 TLS 连通性；正式 DeepSeek API Key 已配置。

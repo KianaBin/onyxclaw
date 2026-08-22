@@ -157,6 +157,24 @@ test("bootstraps an already allocated Sandbox without creating another one", asy
   ]);
 });
 
+test("resume bootstrap failure preserves the Sandbox for a lifecycle retry", async () => {
+  const { calls, saga } = fixture({ writeFailure: new Error("Session ID not found") });
+
+  await assert.rejects(
+    saga.bootstrapSandbox({
+      sandboxId: "resumed-sandbox",
+      instanceId: "existing-instance",
+      traceId: "existing-trace",
+      soul: "# Persistent soul",
+      cleanupOnFailure: false,
+    }),
+    (error) => error instanceof BootstrapError,
+  );
+
+  assert.equal(calls.some(([name]) => name === "kill"), false);
+  assert.equal(calls.some(([name]) => name === "revoke-token"), false);
+});
+
 test("prepares an allocated Sandbox by writing only openclaw.json", async () => {
   const { calls, saga } = fixture();
   const result = await saga.prepareSandbox({
