@@ -8,8 +8,8 @@
   create/connect/pause/commands/files/kill 接口，并在 create 时合并 Provider 固定
   metadata 与实例 trace metadata；
 - `OpenClawBootstrapSaga`：创建后立即签发一次性 Channel token 并把
-  `openclaw.json` 写到最终路径；用户确认或恢复时只写 `SOUL.md`，随后等待 Gateway
-  和 Channel 就绪；
+  `openclaw.json` 写到最终路径；首次确认时只写 `SOUL.md`，恢复时先读取持久化
+  `SOUL.md` 供用户确认，确认后再写回并等待 Gateway 和 Channel 就绪；
 - 分阶段错误、Secret 脱敏和失败补偿清理；
 - `config/providers.alicloud.example.json`：ACS VPC 内 Private Protocol 配置示例。
 
@@ -35,11 +35,13 @@ session；恢复调用 `Sandbox.connect` 获取新控制面和数据面凭据，
 
 控制面与数据面鉴权严格分离：`create/connect/pause/kill` 只使用 E2B API Key；
 `connect` 成功后返回的新 `traffic_access_token` 只注入该 Sandbox 的 envd
-Files、Commands 和健康检查请求。控制面 `connect` 遇到临时 `401/403` 会有限重试；
-若最终失败，页面保持 `paused`，允许用户再次点击恢复。
+Files、Commands 和健康检查请求。控制面 `create/connect/pause/kill` 遇到临时 `401/403`
+会有限重试；
+若 connect 最终失败，页面保持 `paused`，允许用户再次点击恢复。
 
 `connect` 后 Agent Gateway 尚未识别新 session 时，envd 可能短暂返回
-`Session ID not found`；bridge 会对该错误有限退避重试。AgentSphere 有时把控制面 403
-只放在异常文本中，因此 `create/connect` 的鉴权重试会同时识别 HTTP 状态和
-`sandbox.auth.0001`。恢复 bootstrap 失败不会执行
-首次创建场景的 kill 补偿，Controller 会尽量重新暂停 Sandbox，保留后续重试能力。
+`Session ID not found`；bridge 会在 45 秒窗口内对该错误退避重试。若仍失败，Controller
+保持已经恢复的 Sandbox 运行并进入 `resume-data-pending`，页面再次点击只重试读取
+持久化 `SOUL.md`，不会重复 connect 或重新 pause。AgentSphere 有时把控制面 403 只放在
+异常文本中，因此鉴权重试会同时识别 HTTP 状态和 `sandbox.auth.0001`。其他恢复 bootstrap
+失败不会执行首次创建场景的 kill 补偿，Controller 会尽量重新暂停 Sandbox。

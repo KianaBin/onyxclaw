@@ -39,7 +39,9 @@
 
 首次部署没有使用节点 root 登录，也没有把节点密码写入集群资源或仓库。首次创建的运行时 Secret 使用随机生成的无权限占位值。
 
-补充 AgentSphere 和 DeepSeek 信息后，E2B API Key 与模型 Key 均已替换为真实值；Channel signing secret 仍为部署时生成的随机值。
+补充 AgentSphere 和 DeepSeek 信息后，集群中的 Kubernetes Secret 已配置真实 E2B API Key
+和模型 Key；仓库只保存 `secretKeyRef`、环境变量名和占位符，不保存这些值。Channel
+signing secret 仍为部署时生成的随机值，同样只存在于 Kubernetes Secret。
 
 ## Channel Plugin 节点构建结果
 
@@ -172,7 +174,7 @@ API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 绝不携带旧的 `traffic_access_token`，也不使用 Sandbox 数据面 URL。`connect` 成功后返回的
 新 `traffic_access_token` 才会注入新建的数据面 session。为应对 AgentSphere 控制面偶发的
 `401/403`，bridge 会执行有限退避重试；重试同时识别 SDK 的结构化状态和兼容层错误文本中的
-`sandbox.auth.0001`，并统一覆盖 `create/connect`。若仍失败，页面状态恢复为 `paused`，可以再次恢复，
+`sandbox.auth.0001`，并统一覆盖 `create/connect/pause/kill`。若 connect 仍失败，页面状态恢复为 `paused`，可以再次恢复，
 不会锁死到 `error` 状态。
 
 AgentSphere 的 `connect` 成功响应与 Agent Gateway 识别新 session 之间存在短暂传播窗口；
