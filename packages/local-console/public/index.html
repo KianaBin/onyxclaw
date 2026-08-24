@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light" />
     <title>OnyxClaw Cloud Lab</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -142,12 +142,12 @@
                   <path data-edge="e2b-sandbox" d="M605 90 H690" />
                   <path data-edge="bff-openclaw" d="M380 195 C420 235 430 262 475 270" />
                   <path data-edge="sandbox-openclaw" d="M755 130 C750 210 680 270 605 270" />
-                  <path data-edge="openclaw-model" d="M605 270 H690" />
+                  <path data-edge="sandbox-model" d="M775 130 V230" />
                 </g>
-                <g class="architecture-node" data-node="app" transform="translate(30 140)"><rect width="140" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">WEB APP</text><text class="node-sub" x="22" y="68">Mobile UI</text></g>
-                <g class="architecture-node" data-node="bff" transform="translate(250 140)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">NODE BFF</text><text class="node-sub" x="22" y="68">API / Saga</text></g>
-                <g class="architecture-node" data-node="e2b" transform="translate(475 50)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">E2B API</text><text class="node-sub" id="provider-manager-label" x="22" y="68">Sandbox Manager</text></g>
-                <g class="architecture-node" data-node="sandbox" transform="translate(690 50)"><rect width="170" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">SANDBOX</text><text class="node-sub" x="22" y="68">OpenClaw runtime</text></g>
+                <g class="architecture-node" data-node="app" transform="translate(30 140)"><rect width="140" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">手机APP UI</text><text class="node-sub" x="22" y="68">Mobile UI</text></g>
+                <g class="architecture-node" data-node="bff" transform="translate(250 140)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">后端管理平台</text><text class="node-sub" x="22" y="68">API / Saga</text></g>
+                <g class="architecture-node" data-node="e2b" transform="translate(475 50)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">E2B API Server</text><text class="node-sub" id="provider-manager-label" x="22" y="68">AgentSphere 管理面</text></g>
+                <g class="architecture-node" data-node="sandbox" transform="translate(690 50)"><rect width="170" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">Sandbox实例</text><text class="node-sub" x="22" y="68">OpenClaw runtime</text></g>
                 <g class="architecture-node" data-node="openclaw" transform="translate(475 230)"><rect width="130" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text x="22" y="50">CHANNEL</text><text class="node-sub" x="22" y="68">WebSocket</text></g>
                 <g class="architecture-node" data-node="model" transform="translate(690 230)"><rect width="170" height="80" rx="18"/><circle cx="25" cy="25" r="7"/><text id="model-provider-label" x="22" y="50">MODEL API</text><text class="node-sub" id="model-name-label" x="22" y="68">Configured model</text></g>
               </svg>

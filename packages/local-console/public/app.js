@@ -112,7 +112,7 @@ function applyRuntimePresentation(config) {
   const presentation = runtimePresentation(config);
   elements.environmentLabel.textContent = presentation.environmentLabel;
   elements.modeCopy.textContent = presentation.modeCopy;
-  elements.providerManagerLabel.textContent = config.providerName || "Sandbox Manager";
+  elements.providerManagerLabel.textContent = "AgentSphere 管理面";
   elements.modelProviderLabel.textContent = (config.modelProvider || "MODEL API").toUpperCase();
   elements.modelNameLabel.textContent = config.modelName || "Configured model";
   // The runtime strip is shown only in cloud mode (when the provider is

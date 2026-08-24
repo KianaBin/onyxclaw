@@ -10,20 +10,20 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-control-retry`
-- APP 镜像 digest：`sha256:eca92ff2996b476c1109e85fe2b10a87384601434281fcaffdb315787df7c95c`
-- 已核验镜像摘要：`sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-white-ui-v2`
+- APP 镜像 digest：`sha256:138a6f5394e98fcdb0acbaabd49d2e91b7256180c7535b318799982bc39d831c`
+- 已核验镜像摘要：`sha256:138a6f5394e98fcdb0acbaabd49d2e91b7256180c7535b318799982bc39d831c`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
 - Channel 私网 ELB：`192.168.2.13:18890`（后端 NodePort `192.168.2.246:31965`）
 
 部署清单位于 [`deploy/huaweicloud-cce/onyxclaw-app-demo.yaml`](../deploy/huaweicloud-cce/onyxclaw-app-demo.yaml)。
 
-## 2026-08-22 部署结果
+## 当前部署结果（2026-08-24 更新）
 
 - `Deployment/onyxclaw-app`：`1/1 Ready`、`1/1 Available`
 - APP Pod：`Running`、容器重启次数 `0`
-- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:7ce9e57bbab69bfea29c762deaae7993f44a4b95d57dafcb3387bdac1d828ff1`
+- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:138a6f5394e98fcdb0acbaabd49d2e91b7256180c7535b318799982bc39d831c`
 - `/api/status`：返回 `mode: idle`，健康检查通过
 - `/api/ui-config`：已确认 `deploymentMode: cloud`、`providerId: huaweicloud-agentsphere`、`region: cn-south-1`
 - 公网 NodePort：已从集群外验证 `http://113.45.154.231:30080` 可达
