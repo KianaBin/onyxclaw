@@ -195,6 +195,24 @@ test("prepares an allocated Sandbox by writing only openclaw.json", async () => 
   assert.doesNotMatch(writes[0][3], /SOUL/);
 });
 
+test("resume config refresh revokes its new token without killing the Sandbox on failure", async () => {
+  const { calls, saga } = fixture({ writeFailure: new Error("config write failed") });
+
+  await assert.rejects(
+    saga.prepareSandbox({
+      sandboxId: "resumed-sandbox",
+      instanceId: "existing-instance",
+      traceId: "existing-trace",
+      buildConfig: ({ bootstrapToken }) => ({ bootstrapToken }),
+      cleanupOnFailure: false,
+    }),
+    (error) => error instanceof BootstrapError && error.phase === "PREPARING",
+  );
+
+  assert.equal(calls.some(([name]) => name === "revoke-token"), true);
+  assert.equal(calls.some(([name]) => name === "kill"), false);
+});
+
 test("reads the persisted SOUL from the mounted workspace before resume bootstrap", async () => {
   const { calls, saga } = fixture();
 

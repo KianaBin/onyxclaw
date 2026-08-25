@@ -61,7 +61,9 @@ OpenClaw 可能存在以下两种部署形态：
 ### 已有用户
 
 1. 通过用户已有的 `Sandbox ID` 关联对应 Sandbox 实例。
-2. 调用 Connect to Sandbox API 激活或重新连接部署了 OpenClaw 的 Sandbox。
+2. 正常 pause/resume 只调用一次 `Sandbox.connect(sandbox_id)`，丢弃其返回对象并继续使用
+   create 时保存的 SDK 对象和 token；只有 APP/bridge 重启、原内存 session 丢失时才使用
+   connect 返回值重新建立本地 session 缓存。
 3. 跳过首次性格配置步骤。
 4. 通过 OpenClaw Channel 连接 OpenClaw 实例并开始会话。
 

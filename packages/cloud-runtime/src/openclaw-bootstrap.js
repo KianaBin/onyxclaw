@@ -93,7 +93,13 @@ export class OpenClawBootstrapSaga {
     }
   }
 
-  async prepareSandbox({ sandboxId, instanceId, traceId, buildConfig }) {
+  async prepareSandbox({
+    sandboxId,
+    instanceId,
+    traceId,
+    buildConfig,
+    cleanupOnFailure = true,
+  }) {
     this.#validateBuildConfig(buildConfig);
     if (typeof sandboxId !== "string" || !sandboxId) {
       throw new TypeError("sandboxId is required");
@@ -137,9 +143,11 @@ export class OpenClawBootstrapSaga {
           await this.#channel.revokeBootstrapToken(instanceId);
         } catch {}
       }
-      try {
-        await this.#adapter.killSandbox(sandboxId);
-      } catch {}
+      if (cleanupOnFailure) {
+        try {
+          await this.#adapter.killSandbox(sandboxId);
+        } catch {}
+      }
       this.#transition("FAILED", {
         sandboxId,
         instanceId,

@@ -136,12 +136,15 @@ test("resume reads persistent SOUL and waits for confirmation before bootstrap",
 
   await controller.confirmSoul("# Confirmed persistent soul");
   assert.equal(controller.getStatus().mode, "connected");
-  assert.deepEqual(calls.slice(-4).map(([name]) => name), [
+  assert.deepEqual(calls.slice(-5).map(([name]) => name), [
     "pause",
     "connect",
     "read-soul",
+    "prepare",
     "bootstrap",
   ]);
+  assert.equal(calls.at(-2)[1].cleanupOnFailure, false);
+  assert.equal(calls.at(-2)[1].buildConfig instanceof Function, true);
   assert.equal(calls.at(-1)[1].soul, "# Confirmed persistent soul");
   assert.equal(calls.at(-1)[1].cleanupOnFailure, false);
 });
@@ -209,7 +212,7 @@ test("missing resumed data session stays running and retries read without connec
       async readPersistentSoul() {
         readAttempts += 1;
         calls.push(["read-soul", readAttempts]);
-        if (readAttempts === 1) throw new Error("Session ID not found");
+        if (readAttempts === 1) throw new Error("Session not found");
         return { content: "# Persistent", size: 12, sha256: "hash" };
       },
     },
@@ -219,7 +222,7 @@ test("missing resumed data session stays running and retries read without connec
   await controller.confirmSoul("# Persistent");
   await controller.pauseLobsterMode();
 
-  await assert.rejects(controller.resumeLobsterMode(), /Session ID not found/);
+  await assert.rejects(controller.resumeLobsterMode(), /Session not found/);
   assert.equal(controller.getStatus().mode, "resume-data-pending");
   assert.deepEqual(calls.map(([name]) => name), ["pause", "connect", "read-soul"]);
 

@@ -42,7 +42,7 @@ Orchestrator 和 UI 能工作，但不能替代 create/connect/pause/resume/kill
 | 云服务能力 | 验证方式 | 通过标准 |
 | --- | --- | --- |
 | Sandbox 创建 | 调用 E2B 兼容 create API | 返回 Sandbox ID，状态可查询 |
-| Sandbox 连接 | 使用 Sandbox ID 调用 connect | Running/Paused 均能得到有效连接信息 |
+| Sandbox session | create 后保存 SDK 对象和 token | pause/resume 只按 ID connect 一次并继续返回原对象；数据操作不隐式 connect |
 | 超时与生命周期 | 设置 timeout，观察状态变化 | 行为符合 API 约定，不意外丢失数据 |
 | Pause/Resume | 活跃 Channel 期间暂停并恢复 | 连接断开可观测，恢复后 Plugin 自动重连 |
 | 文件系统 | 写入、读取、覆盖 `SOUL.md` | 内容和 hash 一致，恢复后仍存在 |
@@ -289,13 +289,17 @@ Webhook 模式放到第二阶段，用于专门验证 Sandbox 端口暴露、HTT
 
 ### 5.2 已有 Sandbox
 
-1. 输入 Sandbox ID。
-2. 调用 connect；Running 时延长 timeout，Paused 时恢复。
-3. 使用本次 connect 返回的新连接信息，不复用旧 token。
+1. 从当前 APP session 取得 Sandbox ID 和 create 时保存的 SDK session。
+2. Running 时延长 timeout；Paused 时只调用一次 `Sandbox.connect(sandbox_id)`，丢弃返回
+   对象并继续使用 create 时保存的 SDK session。
+3. 继续使用 create 时保存的 traffic/envd token 和 Node wrapper。
 4. 等待 Gateway 和 Plugin 恢复。
 5. 验证 Plugin 重新注册，connection ID 已更新。
 6. 读取 `SOUL.md` 并发送测试消息。
 7. 输出恢复耗时和验证结果。
+
+如果 APP 或 Python bridge 已重启、内存中的原 session 对象已经丢失，必须进入独立的进程
+重启恢复流程，不能在正常 pause/resume 路径中静默创建新 session。
 
 无需构建用户账号与 Sandbox 归属体系；该工具运行在内部可信测试环境。若未来对外开放，再增加资源归属和认证。
 
@@ -305,7 +309,7 @@ Webhook 模式放到第二阶段，用于专门验证 Sandbox 端口暴露、HTT
 2. 记录 connection ID 和最后 heartbeat。
 3. 调用 pause。
 4. 验证 WSS 断开，并记录断开原因和时间。
-5. 调用 connect/resume。
+5. 使用 create 时保留的 SDK session 执行 resume，不重新创建 session。
 6. 验证文件仍存在。
 7. 验证 Gateway 恢复；必要时测试是否需要显式重启。
 8. 验证 Plugin 自动重连并获得新 connection ID。

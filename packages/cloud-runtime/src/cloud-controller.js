@@ -11,9 +11,9 @@ function soulFile(content) {
 }
 
 function isMissingDataSession(error) {
-  return (error instanceof Error ? error.message : String(error))
-    .toLowerCase()
-    .includes("session id not found");
+  return /session(?: id)? not found/i.test(
+    error instanceof Error ? error.message : String(error),
+  );
 }
 
 export class CloudConsoleController {
@@ -159,6 +159,18 @@ export class CloudConsoleController {
     }
     const file = this.saveSoul(content);
     try {
+      if (resumeConfirmation) {
+        // AgentSphere may rebuild the runtime from the Template while only the
+        // SFS-backed workspace survives. Refresh the non-persistent config and
+        // issue a new one-time Channel bootstrap token before probing Gateway.
+        await this.#saga.prepareSandbox({
+          sandboxId: this.#status.sandboxId,
+          instanceId: this.#status.instanceId,
+          traceId: this.#status.traceId,
+          buildConfig: this.#buildConfig,
+          cleanupOnFailure: false,
+        });
+      }
       const ready = await this.#saga.bootstrapSandbox({
         sandboxId: this.#status.sandboxId,
         instanceId: this.#status.instanceId,

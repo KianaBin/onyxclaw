@@ -66,6 +66,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   await session.writeFile("/tmp/test", "hello", { user: "node" });
   assert.equal(await session.readFile("/tmp/test", { user: "node" }), "hello");
   await session.pause();
+  await session.resume();
   await session.kill();
 
   assert.equal(fake.calls.length, 1);
@@ -89,6 +90,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
     "writeFile",
     "readFile",
     "pause",
+    "connect",
     "kill",
   ]);
 });
@@ -162,14 +164,39 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /"pause"|op == "pause"/);
   assert.match(source, /on_timeout/);
   assert.match(source, /control_api_options/);
-  assert.match(source, /is_control_auth_error/);
-  assert.match(source, /sandbox\.auth\.0001/);
-  assert.match(source, /run_control_operation/);
-  assert.match(source, /run_control_operation\(lambda: claimed\.kill\(\)\)/);
-  assert.match(source, /run_control_operation\(lambda: claimed\.pause\(\)\)/);
-  assert.match(source, /Do not pass sandbox_url/);
+  assert.doesNotMatch(source, /is_control_auth_error/);
+  assert.doesNotMatch(source, /run_control_operation/);
+  assert.match(source, /claimed = Sandbox\.create\(/);
+  assert.match(source, /Sandbox\.pause\(sandbox_id, \*\*control_api_options\(\)\)/);
+  assert.match(source, /Sandbox\.connect\(sandbox_id, \*\*control_api_options\(\)\)/);
+  assert.match(source, /claimed\.kill\(\)/);
+  assert.match(source, /def session_for\(sandbox_id\):/);
+  assert.match(source, /def connect_session\(sandbox_id\):/);
+  assert.match(source, /if sandbox_id not in sessions:/);
+  assert.doesNotMatch(source, /connect_session\(sandbox_id, refresh=True\)/);
+  assert.ok(source.indexOf('if op == "create":') < source.indexOf('if op == "pause":'));
+  assert.ok(source.indexOf('if op == "pause":') < source.indexOf('if op == "connect":'));
+  assert.ok(source.indexOf('if op == "connect":') < source.indexOf('if op == "kill":'));
+  const pauseBlock = source.slice(
+    source.indexOf('if op == "pause":'),
+    source.indexOf('if op == "connect":'),
+  );
+  assert.doesNotMatch(pauseBlock, /sessions\.pop/);
+  const connectBlock = source.slice(
+    source.indexOf('if op == "connect":'),
+    source.indexOf('if op == "kill":'),
+  );
+  assert.match(connectBlock, /connect_session\(sandbox_id\)/);
+  const killBlock = source.slice(
+    source.indexOf('if op == "kill":'),
+    source.indexOf('_, session = session_for(sandbox_id)'),
+  );
+  assert.ok(killBlock.indexOf("claimed.kill()") < killBlock.indexOf("sessions.pop"));
+  assert.doesNotMatch(killBlock, /connect_session/);
+  const dataBlock = source.slice(source.indexOf('_, session = session_for(sandbox_id)'));
+  assert.doesNotMatch(dataBlock, /connect_session/);
   assert.match(source, /run_data_operation/);
-  assert.match(source, /session id not found/);
+  assert.match(source, /session\(\?: id\)\? not found/);
   assert.match(source, /E2B_DATA_SESSION_WAIT_SECONDS/);
   assert.match(source, /time\.monotonic/);
   assert.match(source, /"statusCode"/);

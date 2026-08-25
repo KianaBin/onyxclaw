@@ -27,7 +27,7 @@ function provider() {
   };
 }
 
-function fixture({ createError, commandError } = {}) {
+function fixture({ createError, commandError, killError } = {}) {
   const calls = [];
   const files = new Map();
   const session = {
@@ -47,9 +47,13 @@ function fixture({ createError, commandError } = {}) {
     },
     async kill() {
       calls.push(["kill"]);
+      if (killError) throw killError;
     },
     async pause() {
       calls.push(["pause"]);
+    },
+    async resume() {
+      calls.push(["resume"]);
     },
   };
   const client = {
@@ -106,7 +110,7 @@ test("maps provider configuration into an E2B-compatible client", async () => {
   }]);
 });
 
-test("pauses a Sandbox and reconnects it with a fresh session", async () => {
+test("pause and resume preserve the session created with the Sandbox", async () => {
   const { calls, clientFactory } = fixture();
   const adapter = new E2BCompatibleAdapter({
     provider: provider(),
@@ -115,13 +119,35 @@ test("pauses a Sandbox and reconnects it with a fresh session", async () => {
   });
   const { sandboxId } = await adapter.createSandbox();
 
-  assert.deepEqual(await adapter.pauseSandbox(sandboxId), {
-    sandboxId,
-    status: "paused",
-  });
+  await adapter.pauseSandbox(sandboxId);
   await adapter.connectSandbox(sandboxId);
+  await adapter.readFile(sandboxId, "/home/node/.openclaw/workspace/SOUL.md");
 
-  assert.deepEqual(calls.slice(-2), [["pause"], ["connect", sandboxId]]);
+  assert.deepEqual(calls.slice(2), [
+    ["pause"],
+    ["resume"],
+    ["read", "/home/node/.openclaw/workspace/SOUL.md", { user: "node" }],
+  ]);
+  assert.equal(calls.some(([name]) => name === "connect"), false);
+});
+
+test("a failed kill preserves the existing session for later cleanup", async () => {
+  const { calls, clientFactory } = fixture({ killError: new Error("temporary kill failure") });
+  const adapter = new E2BCompatibleAdapter({
+    provider: provider(),
+    secrets: { apiKey: "runtime-secret" },
+    clientFactory,
+  });
+  const { sandboxId } = await adapter.createSandbox();
+
+  await assert.rejects(adapter.killSandbox(sandboxId), CloudRuntimeError);
+  await adapter.runCommand(sandboxId, "id");
+
+  assert.deepEqual(calls.slice(2), [
+    ["kill"],
+    ["command", "id", { user: "node" }],
+  ]);
+  assert.equal(calls.some(([name]) => name === "connect"), false);
 });
 
 test("uses the configured runtime user for commands and files, then kills", async () => {

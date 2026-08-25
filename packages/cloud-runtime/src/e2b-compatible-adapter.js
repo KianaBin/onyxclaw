@@ -175,6 +175,12 @@ export class E2BCompatibleAdapter {
       object: { type: "Sandbox", id, state: "connecting" },
       resultObject: (result) => ({ type: "Sandbox", id: result.sandboxId, state: "running" }),
     }, async () => {
+      // A paused Sandbox keeps the wrapper created with its original traffic
+      // and envd tokens. Normal resume must reuse it instead of reconnecting.
+      if (this.#sessions.has(id)) {
+        await this.#sessions.get(id).resume();
+        return { sandboxId: id, status: "running" };
+      }
       const session = await this.#client.connect(id);
       return this.#remember(session, id);
     });
@@ -191,7 +197,7 @@ export class E2BCompatibleAdapter {
     }, async () => {
       const session = await this.#getSession(id);
       await session.pause();
-      this.#sessions.delete(id);
+      // Keep the wrapper until kill succeeds; paused sessions resume in place.
       return { sandboxId: id, status: "paused" };
     });
   }
@@ -267,11 +273,8 @@ export class E2BCompatibleAdapter {
       resultObject: () => ({ type: "Sandbox", id, state: "terminated" }),
     }, async () => {
       const session = await this.#getSession(id);
-      try {
-        await session.kill();
-      } finally {
-        this.#sessions.delete(id);
-      }
+      await session.kill();
+      this.#sessions.delete(id);
       return { sandboxId: id, status: "killed" };
     });
   }

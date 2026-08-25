@@ -147,7 +147,9 @@ E2B `Sandbox.create`：
 2. prepare：立即把完整 `openclaw.json` 写到 `/home/node/.openclaw/openclaw.json`，触发 Gateway 启动；
 3. bootstrap：用户确认 SOUL 后只写 `/home/node/.openclaw/workspace/SOUL.md`，等待 Gateway 和 Channel；
 4. pause：页面调用 E2B `Sandbox.pause`；
-5. resume：页面以 E2B API Key 调用 `Sandbox.connect` 获取新会话和新的 traffic token，再次执行 SOUL 写入和 Gateway/Channel 就绪等待。
+5. resume：页面复用 create 时保留的 Python Sandbox、traffic/envd token 和 Node wrapper，
+   不重新创建 E2B session；读取持久化 SOUL 并经用户确认后，重新签发一次性 Channel token、
+   重建非持久化 `openclaw.json`，再执行 SOUL 写入和 Gateway/Channel 就绪等待。
 
 SFS 仅挂载 workspace，因此会持久化 `SOUL.md` 和 workspace 中其他 Markdown 文件；包含模型
 和 Channel token 的 `openclaw.json` 仍留在 Sandbox 本地文件系统，不写入 SFS。
@@ -165,23 +167,21 @@ SFS 仅挂载 workspace，因此会持久化 `SOUL.md` 和 workspace 中其他 M
 控制面域名可解析，错误的 `api.` 域名不可解析，Sandbox 数据面域名可解析且 HTTPS
 请求能到达 Agent Gateway（未携带会话信息时返回预期的 HTTP 400）。
 
-Agent Gateway 还要求每次 Sandbox 数据面请求携带创建/连接响应中的
+Agent Gateway 还要求每次 Sandbox 数据面请求携带 create 响应中的
 `traffic_access_token`。修复后的 bridge 会将该值作为
 `E2B-Traffic-Access-Token` 请求头注入 envd 的 Files、Commands 和健康检查请求；E2B
 API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 
-其中 `Sandbox.connect` 与 `create/pause/kill` 一样属于控制面：请求只携带 E2B API Key，
-绝不携带旧的 `traffic_access_token`，也不使用 Sandbox 数据面 URL。`connect` 成功后返回的
-新 `traffic_access_token` 才会注入新建的数据面 session。为应对 AgentSphere 控制面偶发的
-`401/403`，bridge 会执行有限退避重试；重试同时识别 SDK 的结构化状态和兼容层错误文本中的
-`sandbox.auth.0001`，并统一覆盖 `create/connect/pause/kill`。若 connect 仍失败，页面状态恢复为 `paused`，可以再次恢复，
-不会锁死到 `error` 状态。
+所有 E2B-compatible Provider 的 pause 成功后都不会删除 Python `sessions[sandbox_id]` 或
+Node `#sessions[id]`。恢复命中缓存时只调用一次 `Sandbox.connect(sandbox_id)`，丢弃该调用
+返回的新对象，并继续复用 create 得到的原 claimed/routed、traffic token 和 envd token。
+后续 Files、Commands 和 kill 只调用 `session_for()` 获取缓存，不再次 connect。
 
-AgentSphere 的 `connect` 成功响应与 Agent Gateway 识别新 session 之间存在短暂传播窗口；
-这时第一个 envd 请求可能返回 `Session ID not found`。bridge 会仅针对这一明确的瞬时错误
-在 45 秒窗口内退避重试。若窗口结束后仍失败，APP 不再调用 pause，而是保留已经 connect
+恢复后第一个 envd 请求仍可能短暂返回 `Session ID not found` 或 `Session not found`。bridge
+会针对这两种等价错误在 45 秒窗口内退避重试。若窗口结束后仍失败，APP 不再调用 pause，
+而是保留已经 connect
 成功的运行状态并进入 `resume-data-pending`；页面显示“重试恢复”，再次点击只重试数据面
-`Files.read`，不会再次调用 `Sandbox.connect`。
+`Files.read`，不会重新创建 session。
 
 对话侧，Channel 现在会捕获 OpenClaw 模型生成异常并发送一条明确的 outbound 错误消息。
 因此模型网络或 Provider 配置异常时，APP 不再只显示
@@ -332,24 +332,27 @@ Sandbox，页面会保留原会话状态、展示删除错误，并提供“跳�
 用户选择跳过后，APP 只清理本地 controller、Channel 问候缓存和页面遥测状态，返回遗留的
 Sandbox ID 供后续手工清理；该操作不会再次调用 `Sandbox.kill`。
 
-普通清理分支的 `Sandbox.kill` 使用 `HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY`：adapter 在没有
-缓存 session 时先用该 API Key 调用控制面 `Sandbox.connect`，再在原始 control-plane
-session 上执行 `kill()`。`traffic_access_token` 只注入 routed 数据面 session，供 Files 和
-Commands 等 Sandbox 数据面访问使用，不参与 connect、pause 或 kill 的控制面鉴权。
+普通清理分支的 `Sandbox.kill` 使用 create 时保留的原 control-plane session。只有 APP 或
+bridge 重启、缓存 session 已丢失时，才可能使用 E2B API Key 进入独立的 connect 恢复路径。
+`traffic_access_token` 只注入 routed 数据面 session，供 Files 和 Commands 等 Sandbox
+数据面访问使用，不参与 pause 或 kill 的控制面鉴权。
 
 暂停 Sandbox 后点击恢复，流程调整为：
 
-1. 使用 E2B API Key 调用 `Sandbox.connect`；
-2. 通过新的数据面 session 读取挂载路径
+1. 从 Node 和 Python session 字典复用 create 时保留的 wrapper、Sandbox 对象和 token；
+2. 通过原数据面 session 读取挂载路径
    `/home/node/.openclaw/workspace/SOUL.md`；
 3. 页面进入“等待确认”状态，展示读取到的完整内容、大小和 SHA-256；
 4. 用户可以编辑、恢复为本次读取版本，或确认继续；
-5. 仅在确认后写回 `SOUL.md`，等待 Gateway 健康和 Channel 回连，完成 bootstrap。
+5. 确认后重新签发一次性 Channel bootstrap token，并重建、写入非 SFS 的
+   `/home/node/.openclaw/openclaw.json`；
+6. 写回 `SOUL.md`，等待镜像入口启动 Gateway、健康检查通过和 Channel 重新注册，完成
+   bootstrap。
 
-因此恢复按钮本身不再覆盖持久化 SOUL。若读取失败是 `Session ID not found`，APP 保持
+因此恢复按钮本身不再覆盖持久化 SOUL。若读取失败是 `Session ID not found` 或
+`Session not found`，APP 保持
 Sandbox 运行并提供只重试读取的入口；其他读取错误或确认后的 bootstrap 失败仍会尽力重新
-暂停 Sandbox。当前 AgentSphere 控制面若在 `Sandbox.connect` 阶段直接失败，则还未建立
-数据面 session，也不会尝试读取文件或执行 bootstrap。
+暂停 Sandbox。
 
 ## 访问与验证
 

@@ -44,7 +44,7 @@ APP / BFF / OpenClaw Bootstrap Saga
 | 能力 | 统一语义 | 关键输入 | 必须返回/保证 |
 | --- | --- | --- | --- |
 | `Sandbox.create` | 从模板领取或创建实例 | template、timeout、metadata、env、secure | 稳定 Sandbox ID；实例可继续执行文件和命令操作 |
-| `Sandbox.connect` | 连接已有或恢复后的实例 | Sandbox ID | 连接到原实例；不能静默创建新实例 |
+| `Sandbox.connect` | 正常 resume 或进程重启后重新接管实例 | Sandbox ID | 正常 resume 只调用一次并继续使用原缓存；缓存丢失时才保存 connect 返回对象 |
 | `Sandbox.kill` | 终止并回收实例 | Sandbox ID | 可重复调用；实例端口和运行时凭据最终失效 |
 | `Commands.run` | 在 Sandbox 内执行命令 | command、user、timeout | exit code、stdout、stderr；明确超时和非零退出的错误语义 |
 | `Files.write` | 写入运行时文件 | absolute path、content、user | 完整写入；明确覆盖、权限和父目录行为 |
@@ -70,7 +70,7 @@ P0 接口还必须统一以下非功能语义：
 | `Sandbox.get_info` | 查询单实例状态 | 状态延迟、终止后保留时间、端点信息 |
 | `Sandbox.list` | 对账和孤儿资源清理 | 分页、metadata 过滤、创建时间过滤 |
 | `Sandbox.set_timeout` | 延长会话 | 最大时长、是否从当前时间重新计时 |
-| `Sandbox.pause` / resume | 降低空闲成本、恢复老用户 | 文件、内存、进程、端口和 token 是否保留 |
+| `Sandbox.pause` / `Sandbox.connect(id)` resume | 降低空闲成本、恢复老用户 | pause 保留原 SDK 对象和 token；resume 后数据操作不得再次隐式 connect |
 | 进程管理 | 后台进程和日志 | PID/session、signal、重连后是否可追踪 |
 | 健康检查 | 区分控制面、envd、业务进程是否就绪 | 厂商健康接口与业务 `/readyz` 不应混为一谈 |
 | 生命周期事件 | 异步状态同步 | 投递顺序、重复事件、签名和补偿轮询 |

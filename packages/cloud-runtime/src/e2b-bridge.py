@@ -34,7 +34,7 @@ sandbox_url = os.environ.get("E2B_SANDBOX_URL")
 route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
 data_session_wait_seconds = max(
-    1.0, float(os.environ.get("E2B_DATA_SESSION_WAIT_SECONDS", "45"))
+    1.0, float(os.environ.get("E2B_DATA_SESSION_WAIT_SECONDS", "60"))
 )
 
 
@@ -105,37 +105,21 @@ def routed(session):
     )
 
 
-def is_control_auth_error(error):
-    status = getattr(error, "status_code", None) or getattr(error, "status", None)
-    if status in (401, 403):
-        return True
-    message = str(error).lower()
-    return "sandbox.auth.0001" in message or "apikey authentication failed" in message
-
-
-def run_control_operation(operation, max_attempts=4):
-    for attempt in range(max_attempts):
-        try:
-            return operation()
-        except Exception as error:
-            if not is_control_auth_error(error) or attempt + 1 >= max_attempts:
-                raise
-            time.sleep(attempt + 1)
-
-
-def connect_session(sandbox_id, refresh=False, max_attempts=4):
-    if refresh or sandbox_id not in sessions:
-        # Do not pass sandbox_url, traffic_access_token, or data-plane headers
-        # to the control-plane connect endpoint.
-        claimed = run_control_operation(
-            lambda: Sandbox.connect(
-                    sandbox_id,
-                    **control_api_options(),
-            ),
-            max_attempts=max_attempts,
-        )
+def session_for(sandbox_id):
+    """Return the original session pair; reconnect only after bridge state was lost."""
+    if sandbox_id not in sessions:
+        claimed = Sandbox.connect(sandbox_id, **control_api_options())
         sessions[sandbox_id] = (claimed, routed(claimed))
     return sessions[sandbox_id]
+
+
+def connect_session(sandbox_id):
+    """Resume once, then keep using the create-time claimed/routed objects."""
+    if sandbox_id not in sessions:
+        return session_for(sandbox_id)
+    original = sessions[sandbox_id]
+    Sandbox.connect(sandbox_id, **control_api_options())
+    return original
 
 
 def run_data_operation(operation, wait_seconds=data_session_wait_seconds):
@@ -147,7 +131,7 @@ def run_data_operation(operation, wait_seconds=data_session_wait_seconds):
             return operation()
         except Exception as error:
             message = str(error).lower()
-            transient = "session id not found" in message
+            transient = re.search(r"session(?: id)? not found", message) is not None
             remaining = deadline - time.monotonic()
             if not transient or remaining <= 0:
                 raise
@@ -157,25 +141,37 @@ def run_data_operation(operation, wait_seconds=data_session_wait_seconds):
 
 def dispatch(op, params):
     if op == "create":
-        claimed = run_control_operation(
-            lambda: Sandbox.create(
-                template=params["template"],
-                timeout=params.get("timeoutSeconds", 300),
-                metadata=params.get("metadata"),
-                envs=params.get("envs"),
-                secure=params.get("secure", True),
-                lifecycle={"on_timeout": params.get("onTimeout", "kill")},
-                **control_api_options(),
-            )
+        claimed = Sandbox.create(
+            template=params["template"],
+            timeout=params.get("timeoutSeconds", 300),
+            metadata=params.get("metadata"),
+            envs=params.get("envs"),
+            secure=params.get("secure", True),
+            lifecycle={
+                "on_timeout": params.get("onTimeout", "pause"),
+                "auto_resume": False,
+            },
+            **control_api_options(),
         )
         sessions[claimed.sandbox_id] = (claimed, routed(claimed))
         return {"sandboxId": claimed.sandbox_id}
 
     sandbox_id = params["sandboxId"]
+    if op == "pause":
+        Sandbox.pause(sandbox_id, **control_api_options())
+        return {"paused": True}
+
     if op == "connect":
-        claimed, session = connect_session(sandbox_id, refresh=True)
+        connect_session(sandbox_id)
         return {"sandboxId": sandbox_id}
-    claimed, session = connect_session(sandbox_id)
+
+    if op == "kill":
+        claimed, _ = session_for(sandbox_id)
+        claimed.kill()
+        sessions.pop(sandbox_id, None)
+        return {"killed": True}
+
+    _, session = session_for(sandbox_id)
     if op == "command":
         result = run_data_operation(
             lambda: session.commands.run(
@@ -203,14 +199,6 @@ def dispatch(op, params):
             lambda: session.files.read(params["path"], user=params.get("user"))
         )
         return {"content": content}
-    if op == "kill":
-        run_control_operation(lambda: claimed.kill())
-        sessions.pop(sandbox_id, None)
-        return {"killed": True}
-    if op == "pause":
-        run_control_operation(lambda: claimed.pause())
-        sessions.pop(sandbox_id, None)
-        return {"paused": True}
     raise ValueError("unsupported bridge operation")
 
 

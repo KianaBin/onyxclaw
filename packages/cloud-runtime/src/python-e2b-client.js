@@ -154,6 +154,9 @@ function sessionFor(bridge, sandboxId) {
     pause() {
       return bridge.request("pause", { sandboxId });
     },
+    resume() {
+      return bridge.request("connect", { sandboxId });
+    },
   };
 }
 

@@ -32,10 +32,11 @@ IP、VPC/ELB 私网地址、SFS Turbo ID 与共享子路径、AgentSphere Templa
 - 控制面固定使用 `https://agentsphere.cn-south-1.myhuaweicloud.com`，避免 SDK 自动添加
   `api.` 前缀导致 DNS 失败。
 - 数据面单独使用 Agent Gateway Sandbox URL。
-- `create/connect/pause/kill` 只使用 E2B API Key；`Files/Commands` 使用 create/connect
-  返回的 `traffic_access_token`。
-- 控制面鉴权类 `401/403`、`sandbox.auth.0001` 最多重试 4 次；错误日志统一脱敏并保留
-  status code、request ID 和调用阶段。
+- `create/pause/kill` 只使用 E2B API Key；`Files/Commands` 使用 create 返回的
+  `traffic_access_token`。所有 E2B-compatible Provider 的 pause/resume 都保留 create 时的
+  Python Sandbox、traffic/envd token 和 Node wrapper，不重新创建 session。
+- `create/pause/connect/kill` 按生命周期顺序直接调用一次 SDK 方法，不在 bridge 包装控制面
+  重试；错误日志统一脱敏并保留 status code、request ID 和调用阶段。
 - Channel 捕获模型生成异常并返回明确 outbound 错误，避免 APP 只得到
   `timed out waiting for next outbound event`。
 
@@ -46,17 +47,23 @@ IP、VPC/ELB 私网地址、SFS Turbo ID 与共享子路径、AgentSphere Templa
 文件可跨 pause/resume 保留；包含模型和 Channel token 的 `openclaw.json` 不写入共享目录。
 
 新 Sandbox 创建后立即写入 `/home/node/.openclaw/openclaw.json`，触发派生镜像中的 Gateway
-启动；首次 bootstrap 只负责写入 `SOUL.md` 并等待 Gateway 与 Channel 就绪。
+启动；首次 bootstrap 只负责写入 `SOUL.md` 并等待 Gateway 与 Channel 就绪。resume 可能
+基于 Template 重建临时根文件系统，因此持久化 SOUL 确认后会重新签发一次性 Channel token，
+重建并写入 `openclaw.json`，再等待 Gateway 与 Channel 恢复。
 
 ### Pause/resume 与页面流程
 
 - 页面提供 `Sandbox.pause` 和恢复入口。
-- 正常恢复先用 E2B API Key 执行 `Sandbox.connect`，再读取 SFS 中的持久化 `SOUL.md`，
-  展示内容、大小和 SHA-256；用户确认后才写回并执行 bootstrap。
-- Agent Gateway 返回 `Session ID not found` 时，bridge 在 45 秒窗口内退避重试。最终仍
+- pause 后保留 Python 和 Node 两层 session；正常恢复通过原 Node wrapper 只调用一次
+  `Sandbox.connect(sandbox_id)`，丢弃返回对象并继续使用 create 时保存的 claimed/routed 和
+  traffic/envd token。后续读取 SFS、Commands 和 kill 不再隐式 connect。
+- Agent Gateway 返回 `Session ID not found` 或 `Session not found` 时，bridge 在 45 秒窗口内
+  退避重试。最终仍
   失败时不再 pause，也不再次 connect；Sandbox 保持运行，APP 进入
   `resume-data-pending`，页面提供仅重试 `Files.read` 的“重试恢复”按钮。
 - 恢复 bootstrap 的其他失败不会执行首次创建场景的 kill 补偿，会尽量重新暂停 Sandbox。
+- 恢复配置刷新失败时撤销本次新签发的 Channel token，但不 kill Sandbox；E2B
+  traffic/envd token 和两层 session 仍保持 create 时的对象。
 - 重置新用户默认调用 `Sandbox.kill`；删除失败后页面允许跳过 Sandbox 清理，只重置 APP
   本地用户状态，并回显遗留 Sandbox ID 供后续人工清理。
 
@@ -67,9 +74,14 @@ IP、VPC/ELB 私网地址、SFS Turbo ID 与共享子路径、AgentSphere Templa
 - Channel Plugin、envd 和健康检查脚本已纳入派生镜像构建流程。
 - CCE demo APP 配置 DeepSeek `deepseek-v4-flash`、AgentSphere 控制面/数据面、Channel
   私网回连地址、SFS metadata 和 Template ID；所有实际密钥通过 Kubernetes Secret 注入。
-- 当前 CCE APP 镜像固定到 `0.3.8-resume-control-retry` 的不可变 digest。
+- 交接时 CCE APP 镜像固定到 `0.3.8-resume-control-retry` 的不可变 digest；后续部署状态以
+  CCE 中实际 Deployment、ReplicaSet、Pod 和镜像 digest 为准，仓库 YAML 只作为参考快照。
 
 ## 剩余遗留事项
+
+暂停恢复问题的后续实验、代码/配置修改、镜像部署和服务端反馈统一记录在
+[`huaweicloud-sandbox-resume-bug-tracker.md`](./huaweicloud-sandbox-resume-bug-tracker.md)。
+本节保留为交接时点快照，不再单独维护后续状态。
 
 ### 1. 暂停后恢复失败
 
