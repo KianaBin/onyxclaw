@@ -159,18 +159,6 @@ export class CloudConsoleController {
     }
     const file = this.saveSoul(content);
     try {
-      if (resumeConfirmation) {
-        // AgentSphere may rebuild the runtime from the Template while only the
-        // SFS-backed workspace survives. Refresh the non-persistent config and
-        // issue a new one-time Channel bootstrap token before probing Gateway.
-        await this.#saga.prepareSandbox({
-          sandboxId: this.#status.sandboxId,
-          instanceId: this.#status.instanceId,
-          traceId: this.#status.traceId,
-          buildConfig: this.#buildConfig,
-          cleanupOnFailure: false,
-        });
-      }
       const ready = await this.#saga.bootstrapSandbox({
         sandboxId: this.#status.sandboxId,
         instanceId: this.#status.instanceId,
@@ -245,6 +233,18 @@ export class CloudConsoleController {
       const persistentSoul = await this.#saga.readPersistentSoul(
         this.#status.sandboxId,
       );
+      // AgentSphere restores a paused Sandbox by rebuilding its runtime while
+      // preserving the logical Sandbox ID and SFS-backed workspace. Recreate
+      // the non-persistent config now so the image entrypoint can start the
+      // Gateway while the user reviews the persisted SOUL.md. Confirmation
+      // only writes SOUL.md and completes the readiness/channel bootstrap.
+      await this.#saga.prepareSandbox({
+        sandboxId: this.#status.sandboxId,
+        instanceId: this.#status.instanceId,
+        traceId: this.#status.traceId,
+        buildConfig: this.#buildConfig,
+        cleanupOnFailure: false,
+      });
       this.#soul = persistentSoul.content;
       this.#soulRestore = persistentSoul.content;
       this.#status = {

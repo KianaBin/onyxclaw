@@ -9,8 +9,8 @@
   metadata 与实例 trace metadata；
 - `OpenClawBootstrapSaga`：创建后立即签发一次性 Channel token 并把
   `openclaw.json` 写到最终路径；首次确认时只写 `SOUL.md`，恢复时先读取持久化
-  `SOUL.md` 供用户确认，确认后重新签发 Channel token、重写非持久化
-  `openclaw.json`，再写回 SOUL 并等待 Gateway 和 Channel 就绪；
+  `SOUL.md`，随即重新签发 Channel token、重写非持久化 `openclaw.json` 以启动
+  OpenClaw，再把内容展示给用户确认；确认后只写回 SOUL 并等待 Gateway 和 Channel 就绪；
 - 分阶段错误、Secret 脱敏和失败补偿清理；
 - `config/providers.alicloud.example.json`：ACS VPC 内 Private Protocol 配置示例。
 

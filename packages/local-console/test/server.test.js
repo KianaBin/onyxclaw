@@ -273,7 +273,7 @@ test("session reset returns the BFF to new-user state and clears Sandbox Service
   assert.deepEqual(monitor.snapshot().objects, []);
 });
 
-test("web UI exposes a single reset button, parallel observability cards, and 5-column SDK calls", async (t) => {
+test("web UI exposes a single reset button, full-width architecture, and 5-column SDK calls", async (t) => {
   const app = createLocalConsoleServer({
     controller: createController(),
     host: "127.0.0.1",
@@ -298,13 +298,14 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.doesNotMatch(html, /class="tab[^>]*>\s*<b>\d+<\/b>/);
   assert.match(html, /class="phone-frame"/);
   assert.match(html, /SYSTEM ARCHITECTURE/);
-  assert.match(html, /API OBJECTS/);
+  assert.doesNotMatch(html, /API OBJECTS/);
   assert.match(html, /E2B SDK API/);
   assert.match(html, /id="architecture-map"/);
   assert.match(html, /手机APP UI/);
   assert.match(html, /后端管理平台/);
-  assert.match(html, /E2B API Server/);
   assert.match(html, /AgentSphere 管理面/);
+  assert.match(html, /E2B API Server/);
+  assert.match(html, /E2B API\/SDK/);
   assert.match(html, /Sandbox实例/);
   assert.match(html, /data-edge="sandbox-model"/);
   assert.doesNotMatch(html, /data-edge="openclaw-model"/);
@@ -312,7 +313,7 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.match(html, /id="api-call-list"/);
   assert.match(html, /id="api-summary"/);
   assert.match(html, /id="failed-api-list"/);
-  assert.match(html, /id="resource-grid"/);
+  assert.doesNotMatch(html, /id="resource-grid"/);
   // Removed multi-tenant entry controls
   assert.doesNotMatch(html, /id="cloud-entry"/);
   assert.doesNotMatch(html, /data-user-type="new"/);
@@ -332,11 +333,10 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.match(styles, /\.customer-stage\s*\{[^}]*min-height:\s*0/);
   assert.match(styles, /\.phone-frame\s*\{[\s\S]*?aspect-ratio:\s*430\s*\/\s*780/);
   assert.match(styles, /\.phone-frame\s*\{[^}]*max-width:\s*100%/);
-  // service-workbench is a 2-row layout; top row is the parallel architecture + objects
+  // service-workbench is a 2-row layout with full-width architecture and SDK cards.
   assert.match(styles, /\.service-workbench\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1\.05fr\)/);
-  // After removing the ACS CLUSTER card the two remaining cards sit
-  // side-by-side as equal columns.
-  assert.match(styles, /\.observability-top\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
+  assert.doesNotMatch(styles, /\.observability-top\s*\{[^}]*grid-template-columns/);
+  assert.match(styles, /\.architecture-card\s*\{[^}]*width:\s*100%/);
   assert.doesNotMatch(styles, /\.cloud-entry/);
   assert.doesNotMatch(styles, /\.mini-metrics/);
   assert.match(styles, /\.api-table-head,\s*\.api-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(120px,\s*1\.05fr\)\s+minmax\(150px,\s*1\.25fr\)\s+minmax\(120px,\s*1fr\)\s+88px\s+64px/);
@@ -348,7 +348,7 @@ test("web UI exposes a single reset button, parallel observability cards, and 5-
   assert.match(styles, /\.api-row\.failed\s*\{/);
   assert.match(styles, /\.api-operation-detail\s*\{/);
   assert.match(browserApp, /summarizeCalls\(calls\)/);
-  assert.match(browserApp, /providerManagerLabel\.textContent\s*=\s*"AgentSphere 管理面"/);
+  assert.match(browserApp, /providerManagerLabel\.textContent\s*=\s*"E2B API Server"/);
   assert.match(browserApp, /call\.operationContext\?\.value/);
   assert.doesNotMatch(styles, /@media\s*\(max-width:\s*860px\)/);
   assert.match(styles, /@media\s*\(max-width:\s*1180px\)/);

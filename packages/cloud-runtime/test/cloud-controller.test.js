@@ -113,7 +113,7 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
   assert.equal(status.mode, "connected");
 });
 
-test("resume reads persistent SOUL and waits for confirmation before bootstrap", async () => {
+test("resume starts OpenClaw before waiting for persistent SOUL confirmation", async () => {
   const { calls, controller } = fixture();
   await controller.startLobsterMode();
   await controller.confirmSoul("# Persistent lobster");
@@ -128,11 +128,14 @@ test("resume reads persistent SOUL and waits for confirmation before bootstrap",
   assert.equal(resumed.soulConfirmed, false);
   assert.equal(resumed.connectionId, null);
   assert.equal(controller.getSoul().content, "# Soul restored from SFS Turbo");
-  assert.deepEqual(calls.slice(-3).map(([name]) => name), [
+  assert.deepEqual(calls.slice(-4).map(([name]) => name), [
     "pause",
     "connect",
     "read-soul",
+    "prepare",
   ]);
+  assert.equal(calls.at(-1)[1].cleanupOnFailure, false);
+  assert.equal(calls.at(-1)[1].buildConfig instanceof Function, true);
 
   await controller.confirmSoul("# Confirmed persistent soul");
   assert.equal(controller.getStatus().mode, "connected");
@@ -143,8 +146,6 @@ test("resume reads persistent SOUL and waits for confirmation before bootstrap",
     "prepare",
     "bootstrap",
   ]);
-  assert.equal(calls.at(-2)[1].cleanupOnFailure, false);
-  assert.equal(calls.at(-2)[1].buildConfig instanceof Function, true);
   assert.equal(calls.at(-1)[1].soul, "# Confirmed persistent soul");
   assert.equal(calls.at(-1)[1].cleanupOnFailure, false);
 });
@@ -205,7 +206,9 @@ test("missing resumed data session stays running and retries read without connec
       },
     },
     saga: {
-      async prepareSandbox() {},
+      async prepareSandbox() {
+        calls.push(["prepare"]);
+      },
       async bootstrapSandbox() {
         return { connectionId: "connection-3" };
       },
@@ -220,6 +223,7 @@ test("missing resumed data session stays running and retries read without connec
   });
   await controller.startLobsterMode();
   await controller.confirmSoul("# Persistent");
+  calls.length = 0;
   await controller.pauseLobsterMode();
 
   await assert.rejects(controller.resumeLobsterMode(), /Session not found/);
@@ -233,6 +237,7 @@ test("missing resumed data session stays running and retries read without connec
     "connect",
     "read-soul",
     "read-soul",
+    "prepare",
   ]);
 });
 

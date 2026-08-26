@@ -56,8 +56,6 @@ const elements = {
   send: document.querySelector(".send-button"),
   resetUser: document.querySelector("#reset-user"),
   skipReset: document.querySelector("#skip-reset"),
-  resourceGrid: document.querySelector("#resource-grid"),
-  objectsCount: document.querySelector("#objects-count"),
   apiCallList: document.querySelector("#api-call-list"),
   callsCount: document.querySelector("#calls-count"),
   callsTotal: document.querySelector("#calls-total"),
@@ -87,7 +85,6 @@ let helloLoading = false;
 let initialLanding = true;
 let uiConfig = { deploymentMode: "local" };
 let currentCalls = [];
-let currentObjects = [];
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -112,7 +109,7 @@ function applyRuntimePresentation(config) {
   const presentation = runtimePresentation(config);
   elements.environmentLabel.textContent = presentation.environmentLabel;
   elements.modeCopy.textContent = presentation.modeCopy;
-  elements.providerManagerLabel.textContent = "AgentSphere 管理面";
+  elements.providerManagerLabel.textContent = "E2B API Server";
   elements.modelProviderLabel.textContent = (config.modelProvider || "MODEL API").toUpperCase();
   elements.modelNameLabel.textContent = config.modelName || "Configured model";
   // The runtime strip is shown only in cloud mode (when the provider is
@@ -182,40 +179,6 @@ function renderStatus(status) {
   });
   showStep(landing.visibleStep, status);
   if (status.error) notice(elements.modeNotice, status.error, true);
-}
-
-function renderObjects(objects) {
-  currentObjects = objects;
-  elements.resourceGrid.replaceChildren();
-  if (!objects.length) {
-    const empty = document.createElement("div");
-    empty.className = "resource-empty";
-    const glyph = document.createElement("span");
-    glyph.textContent = "⌁";
-    const copy = document.createElement("p");
-    copy.textContent = "等待后端 API 对象返回";
-    empty.append(glyph, copy);
-    elements.resourceGrid.append(empty);
-    elements.objectsCount.textContent = "0";
-    return;
-  }
-  for (const object of objects.slice(0, 8)) {
-    const card = document.createElement("article");
-    card.className = `resource-card ${object.state}`;
-    const header = document.createElement("header");
-    const label = document.createElement("b");
-    label.textContent = object.type;
-    const dot = document.createElement("i");
-    header.append(label, dot);
-    const id = document.createElement("p");
-    id.textContent = object.id;
-    id.title = object.id;
-    const state = document.createElement("small");
-    state.textContent = object.state;
-    card.append(header, id, state);
-    elements.resourceGrid.append(card);
-  }
-  elements.objectsCount.textContent = String(objects.length);
 }
 
 function renderCalls(calls) {
@@ -329,7 +292,6 @@ function renderArchitecture(calls, objects) {
 async function refreshObservability() {
   try {
     const observation = await api("/api/observability");
-    renderObjects(observation.objects);
     renderCalls(observation.calls);
     renderArchitecture(observation.calls, observation.objects);
     elements.pollStatus.textContent = "LIVE";
@@ -550,8 +512,8 @@ elements.resumeSandbox.addEventListener("click", async () => {
     const status = await api("/api/lobster/resume", { method: "POST" });
     initialLanding = false;
     renderStatus(status);
-    notice(elements.soulNotice, "已从 SFS Turbo 挂载的 workspace/SOUL.md 读取内容，请确认是否写入并继续 bootstrap。");
-    elements.chatState.textContent = "等待确认持久化性格";
+    notice(elements.soulNotice, "OpenClaw 已开始启动，并已从 SFS Turbo 挂载的 workspace/SOUL.md 读取内容；请确认是否写入该性格并进入对话。");
+    elements.chatState.textContent = "OpenClaw 启动中 · 等待确认持久化性格";
   } catch (error) {
     notice(elements.modeNotice, `恢复失败：${error.message}`, true);
     await refreshStatus();

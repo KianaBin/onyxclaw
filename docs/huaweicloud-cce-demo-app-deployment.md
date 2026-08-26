@@ -148,8 +148,9 @@ E2B `Sandbox.create`：
 3. bootstrap：用户确认 SOUL 后只写 `/home/node/.openclaw/workspace/SOUL.md`，等待 Gateway 和 Channel；
 4. pause：页面调用 E2B `Sandbox.pause`；
 5. resume：页面复用 create 时保留的 Python Sandbox、traffic/envd token 和 Node wrapper，
-   不重新创建 E2B session；读取持久化 SOUL 并经用户确认后，重新签发一次性 Channel token、
-   重建非持久化 `openclaw.json`，再执行 SOUL 写入和 Gateway/Channel 就绪等待。
+   不重新创建 E2B session；读取持久化 SOUL 后立即重新签发一次性 Channel token、重建
+   非持久化 `openclaw.json` 以启动 OpenClaw，再展示 SOUL 供用户确认；确认后只执行
+   SOUL 写入和 Gateway/Channel 就绪等待。
 
 SFS 仅挂载 workspace，因此会持久化 `SOUL.md` 和 workspace 中其他 Markdown 文件；包含模型
 和 Channel token 的 `openclaw.json` 仍留在 Sandbox 本地文件系统，不写入 SFS。
@@ -342,11 +343,11 @@ bridge 重启、缓存 session 已丢失时，才可能使用 E2B API Key 进入
 1. 从 Node 和 Python session 字典复用 create 时保留的 wrapper、Sandbox 对象和 token；
 2. 通过原数据面 session 读取挂载路径
    `/home/node/.openclaw/workspace/SOUL.md`；
-3. 页面进入“等待确认”状态，展示读取到的完整内容、大小和 SHA-256；
-4. 用户可以编辑、恢复为本次读取版本，或确认继续；
-5. 确认后重新签发一次性 Channel bootstrap token，并重建、写入非 SFS 的
-   `/home/node/.openclaw/openclaw.json`；
-6. 写回 `SOUL.md`，等待镜像入口启动 Gateway、健康检查通过和 Channel 重新注册，完成
+3. 读取成功后立即重新签发一次性 Channel bootstrap token，并重建、写入非 SFS 的
+   `/home/node/.openclaw/openclaw.json`；镜像入口随即启动 Gateway，不等待性格确认；
+4. 页面进入“等待确认”状态，展示读取到的完整内容、大小和 SHA-256；
+5. 用户可以编辑、恢复为本次读取版本，或确认继续；
+6. 确认后写回 `SOUL.md`，等待已经启动的 Gateway 健康检查通过和 Channel 重新注册，完成
    bootstrap。
 
 因此恢复按钮本身不再覆盖持久化 SOUL。若读取失败是 `Session ID not found` 或
