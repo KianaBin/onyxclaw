@@ -177,8 +177,8 @@ API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 
 所有 E2B-compatible Provider 的 pause 成功后都不会删除 Python `sessions[sandbox_id]` 或
 Node `#sessions[id]`。恢复命中缓存时只调用一次 `Sandbox.connect(sandbox_id)`，并用返回的
-新对象替换 Python claimed/routed 缓存，刷新 domain、traffic token 和 envd token。后续
-Files、Commands 和 kill 只调用 `session_for()` 获取刷新后的缓存，不再次 connect。
+新对象替换 Python claimed/routed 缓存，刷新恢复后 Gateway data session 对应的 domain、
+traffic token 和 envd token。后续 Files、Commands 和 kill 只调用 `session_for()` 获取刷新后的缓存，不再次 connect。
 
 固定 Agent Gateway 地址不会像标准 E2B 子域名那样在 hostname 中携带 Sandbox ID。routed
 数据面因此除 `E2B-Traffic-Access-Token` 和 envd `X-Access-Token` 外，还显式发送

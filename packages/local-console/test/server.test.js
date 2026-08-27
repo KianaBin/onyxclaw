@@ -368,6 +368,9 @@ test("web UI exposes a single reset button, full-width architecture, and 5-colum
   // The single reset button handles enter + stop + reset
   assert.match(browserApp, /async function disconnectAndReset/);
   assert.match(browserApp, /skipSandboxCleanup/);
+  assert.match(browserApp, /function beginNewUiSession/);
+  assert.match(browserApp, /uiSessionAbortController\.abort\(\)/);
+  assert.match(browserApp, /generation !== uiSessionGeneration/);
   assert.match(browserApp, /async function enterLobsterMode/);
   assert.match(browserApp, /clearApiCallsUi/);
   assert.match(browserApp, /resolveTabState/);

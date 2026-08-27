@@ -23,6 +23,16 @@ export class ChannelPlatformSimulator {
     this.#bootstrapTokens.delete(instanceId);
   }
 
+  resetInstance(instanceId) {
+    this.#bootstrapTokens.delete(instanceId);
+    for (const [sessionToken, session] of this.#sessions) {
+      if (session.instanceId === instanceId) this.#sessions.delete(sessionToken);
+    }
+    this.outboundEvents = this.outboundEvents.filter(
+      (event) => event.instanceId !== instanceId,
+    );
+  }
+
   register({ instanceId, accountId, bootstrapToken, pluginVersion }) {
     const issued = this.#bootstrapTokens.get(instanceId);
     if (!issued || issued.value !== bootstrapToken) {

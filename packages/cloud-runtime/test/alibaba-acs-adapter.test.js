@@ -131,6 +131,52 @@ test("pause and resume preserve the session created with the Sandbox", async () 
   assert.equal(calls.some(([name]) => name === "connect"), false);
 });
 
+test("reset cleanup isolates a second Sandbox lifecycle from the first", async () => {
+  const calls = [];
+  let createCount = 0;
+  const clientFactory = () => ({
+    async create() {
+      createCount += 1;
+      const sandboxId = `sandbox-${createCount}`;
+      return {
+        sandboxId,
+        async pause() { calls.push(["pause", sandboxId]); },
+        async resume() { calls.push(["resume", sandboxId]); },
+        async kill() { calls.push(["kill", sandboxId]); },
+        async readFile() { calls.push(["read", sandboxId]); return "soul"; },
+      };
+    },
+    async connect(sandboxId) {
+      calls.push(["unexpected-connect", sandboxId]);
+      throw new Error("create-time session was lost");
+    },
+  });
+  const adapter = new E2BCompatibleAdapter({
+    provider: provider(),
+    secrets: { apiKey: "runtime-secret" },
+    clientFactory,
+  });
+
+  const first = await adapter.createSandbox();
+  await adapter.pauseSandbox(first.sandboxId);
+  await adapter.connectSandbox(first.sandboxId);
+  await adapter.killSandbox(first.sandboxId);
+
+  const second = await adapter.createSandbox();
+  await adapter.pauseSandbox(second.sandboxId);
+  await adapter.connectSandbox(second.sandboxId);
+  await adapter.readFile(second.sandboxId, "/home/node/.openclaw/workspace/SOUL.md");
+
+  assert.deepEqual(calls, [
+    ["pause", "sandbox-1"],
+    ["resume", "sandbox-1"],
+    ["kill", "sandbox-1"],
+    ["pause", "sandbox-2"],
+    ["resume", "sandbox-2"],
+    ["read", "sandbox-2"],
+  ]);
+});
+
 test("a failed kill preserves the existing session for later cleanup", async () => {
   const { calls, clientFactory } = fixture({ killError: new Error("temporary kill failure") });
   const adapter = new E2BCompatibleAdapter({

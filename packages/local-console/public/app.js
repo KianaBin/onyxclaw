@@ -85,10 +85,20 @@ let helloLoading = false;
 let initialLanding = true;
 let uiConfig = { deploymentMode: "local" };
 let currentCalls = [];
+let uiSessionGeneration = 0;
+let uiSessionAbortController = new AbortController();
+
+function beginNewUiSession() {
+  uiSessionGeneration += 1;
+  uiSessionAbortController.abort();
+  uiSessionAbortController = new AbortController();
+  return uiSessionGeneration;
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
+    signal: options.signal ?? uiSessionAbortController.signal,
     headers: {
       "x-onyxclaw-request": "local-ui",
       ...(options.body ? { "content-type": "application/json" } : {}),
@@ -290,13 +300,16 @@ function renderArchitecture(calls, objects) {
 }
 
 async function refreshObservability() {
+  const generation = uiSessionGeneration;
   try {
     const observation = await api("/api/observability");
+    if (generation !== uiSessionGeneration) return;
     renderCalls(observation.calls);
     renderArchitecture(observation.calls, observation.objects);
     elements.pollStatus.textContent = "LIVE";
     elements.pollStatus.className = "poll-status ready";
   } catch {
+    if (generation !== uiSessionGeneration) return;
     elements.pollStatus.textContent = "OFFLINE";
     elements.pollStatus.className = "poll-status error";
   }
@@ -347,13 +360,18 @@ function renderSoul(file) {
 }
 
 async function loadSoul() {
+  const generation = uiSessionGeneration;
   elements.soul.disabled = true;
   try {
-    renderSoul(await api("/api/soul"));
+    const soul = await api("/api/soul");
+    if (generation !== uiSessionGeneration) return;
+    renderSoul(soul);
     notice(elements.soulNotice, "");
   } catch (error) {
+    if (generation !== uiSessionGeneration) return;
     notice(elements.soulNotice, error.message, true);
   } finally {
+    if (generation !== uiSessionGeneration) return;
     elements.soul.disabled = false;
   }
 }
@@ -388,10 +406,12 @@ function resetChatView() {
 
 async function ensureHello() {
   if (helloShown || helloLoading) return;
+  const generation = uiSessionGeneration;
   helloLoading = true;
   elements.chatState.textContent = "龙虾正在准备第一声问候…";
   try {
     const hello = await api("/api/chat/hello", { method: "POST" });
+    if (generation !== uiSessionGeneration) return;
     addMessage(
       "assistant",
       hello.text,
@@ -399,8 +419,10 @@ async function ensureHello() {
     );
     helloShown = true;
   } catch (error) {
+    if (generation !== uiSessionGeneration) return;
     addMessage("assistant", `问候生成失败：${error.message}`, "系统 · 可以刷新重试");
   } finally {
+    if (generation !== uiSessionGeneration) return;
     helloLoading = false;
     elements.chatState.textContent = "已连接 · 可以发送";
   }
@@ -429,6 +451,7 @@ async function enterLobsterMode() {
 }
 
 async function disconnectAndReset({ skipSandboxCleanup = false } = {}) {
+  beginNewUiSession();
   elements.resetUser.disabled = true;
   elements.skipReset.disabled = true;
   initialLanding = false;
@@ -454,11 +477,14 @@ async function disconnectAndReset({ skipSandboxCleanup = false } = {}) {
       ? `已跳过旧 Sandbox 清理并重置用户。遗留 Sandbox：${status.orphanedSandboxId || "未知"}，请稍后手动清理。`
       : "已清理连接和会话状态，现在按全新用户流程开始。");
   } catch (error) {
+    await refreshStatus();
     notice(elements.modeNotice, `重置失败：${error.message}`, true);
     elements.skipReset.hidden = false;
   } finally {
     elements.resetUser.disabled = false;
     elements.skipReset.disabled = false;
+    elements.confirmSoul.disabled = false;
+    elements.soul.disabled = false;
   }
 }
 
@@ -535,18 +561,22 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 elements.reloadSoul.addEventListener("click", loadSoul);
 elements.confirmSoul.addEventListener("click", async () => {
+  const generation = uiSessionGeneration;
   elements.confirmSoul.disabled = true;
   try {
     const file = await api("/api/soul/confirm", {
       method: "POST",
       body: JSON.stringify({ content: elements.soul.value }),
     });
+    if (generation !== uiSessionGeneration) return;
     renderSoul(file);
     notice(elements.soulNotice, "性格已确认，正在进入对话…");
     await refreshStatus();
   } catch (error) {
+    if (generation !== uiSessionGeneration) return;
     notice(elements.soulNotice, error.message, true);
   } finally {
+    if (generation !== uiSessionGeneration) return;
     elements.confirmSoul.disabled = false;
   }
 });
@@ -565,6 +595,7 @@ elements.chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const text = elements.chatInput.value.trim();
   if (!text) return;
+  const generation = uiSessionGeneration;
   elements.chatInput.value = "";
   elements.chatInput.disabled = true;
   elements.send.disabled = true;
@@ -575,10 +606,13 @@ elements.chatForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({ text }),
     });
+    if (generation !== uiSessionGeneration) return;
     addMessage("assistant", reply.text, `OpenClaw · ${reply.durationMs} ms · ${reply.traceId.slice(0, 8)}`);
   } catch (error) {
+    if (generation !== uiSessionGeneration) return;
     addMessage("assistant", `发送失败：${error.message}`, "系统");
   } finally {
+    if (generation !== uiSessionGeneration) return;
     elements.chatInput.disabled = false;
     elements.send.disabled = false;
     elements.chatInput.focus();

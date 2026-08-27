@@ -36,6 +36,7 @@ export class CloudConsoleController {
   #soul;
   #soulRestore;
   #status;
+  #lifecycleRevision = 0;
 
   constructor({
     adapter,
@@ -81,6 +82,7 @@ export class CloudConsoleController {
 
   async startLobsterMode({ sandboxId, instanceId: savedInstanceId } = {}) {
     if (this.#status.mode !== "idle") return this.getStatus();
+    const lifecycleRevision = this.#lifecycleRevision;
     this.#status = { ...this.#status, mode: "starting", error: null };
     try {
       if (sandboxId) {
@@ -98,6 +100,9 @@ export class CloudConsoleController {
           traceId: this.#status.traceId,
           soul: this.#soul,
         });
+        if (lifecycleRevision !== this.#lifecycleRevision) {
+          throw new Error("本次操作已被重置新用户取消");
+        }
         this.#status = {
           ...this.#status,
           mode: "connected",
@@ -112,12 +117,21 @@ export class CloudConsoleController {
       const created = await this.#adapter.createSandbox({
         metadata: { instanceId, traceId },
       });
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        try {
+          await this.#adapter.killSandbox(created.sandboxId);
+        } catch {}
+        throw new Error("本次操作已被重置新用户取消");
+      }
       await this.#saga.prepareSandbox({
         sandboxId: created.sandboxId,
         instanceId,
         traceId,
         buildConfig: this.#buildConfig,
       });
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        throw new Error("本次操作已被重置新用户取消");
+      }
       this.#status = {
         ...this.#status,
         mode: "allocated",
@@ -131,6 +145,7 @@ export class CloudConsoleController {
       };
       return this.getStatus();
     } catch (error) {
+      if (lifecycleRevision !== this.#lifecycleRevision) throw error;
       this.#status = {
         ...this.#status,
         mode: "error",
@@ -161,15 +176,22 @@ export class CloudConsoleController {
     if (this.#status.mode !== "allocated" && !resumeConfirmation) {
       throw new Error("请先创建云端 Sandbox 或恢复暂停的 Sandbox");
     }
+    const lifecycleRevision = this.#lifecycleRevision;
+    const sandboxId = this.#status.sandboxId;
+    const instanceId = this.#status.instanceId;
+    const traceId = this.#status.traceId;
     const file = this.saveSoul(content);
     try {
       const ready = await this.#saga.bootstrapSandbox({
-        sandboxId: this.#status.sandboxId,
-        instanceId: this.#status.instanceId,
-        traceId: this.#status.traceId,
+        sandboxId,
+        instanceId,
+        traceId,
         soul: content,
         cleanupOnFailure: !resumeConfirmation,
       });
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        throw new Error("本次操作已被重置新用户取消");
+      }
       this.#soulRestore = content;
       this.#status = {
         ...this.#status,
@@ -181,6 +203,7 @@ export class CloudConsoleController {
       };
       return { ...file, soulConfirmed: true, currentStep: "chat" };
     } catch (error) {
+      if (lifecycleRevision !== this.#lifecycleRevision) throw error;
       if (resumeConfirmation) {
         try {
           await this.#adapter.pauseSandbox(this.#status.sandboxId);
@@ -202,9 +225,14 @@ export class CloudConsoleController {
     if (this.#status.mode !== "connected" || !this.#status.sandboxId) {
       throw new Error("云端 OpenClaw 尚未连接，不能暂停");
     }
+    const lifecycleRevision = this.#lifecycleRevision;
+    const sandboxId = this.#status.sandboxId;
     this.#status = { ...this.#status, mode: "pausing", error: null };
     try {
-      await this.#adapter.pauseSandbox(this.#status.sandboxId);
+      await this.#adapter.pauseSandbox(sandboxId);
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        throw new Error("本次操作已被重置新用户取消");
+      }
       this.#status = {
         ...this.#status,
         mode: "paused",
@@ -213,6 +241,7 @@ export class CloudConsoleController {
       };
       return this.getStatus();
     } catch (error) {
+      if (lifecycleRevision !== this.#lifecycleRevision) throw error;
       this.#status = {
         ...this.#status,
         mode: "connected",
@@ -227,27 +256,41 @@ export class CloudConsoleController {
     if ((this.#status.mode !== "paused" && !retryDataSession) || !this.#status.sandboxId) {
       throw new Error("Sandbox 当前不是暂停状态");
     }
+    const lifecycleRevision = this.#lifecycleRevision;
+    const sandboxId = this.#status.sandboxId;
+    const instanceId = this.#status.instanceId;
+    const traceId = this.#status.traceId;
     this.#status = { ...this.#status, mode: "resuming", error: null };
-    let connectedForResume = retryDataSession;
+    let connectedForResume = false;
     try {
-      if (!retryDataSession) {
-        await this.#adapter.connectSandbox(this.#status.sandboxId);
-        connectedForResume = true;
+      // A successful control-plane connect does not guarantee that Agent
+      // Gateway created the data session. A user-triggered retry must connect
+      // again to obtain a fresh routed session before retrying Files.write.
+      await this.#adapter.connectSandbox(sandboxId);
+      connectedForResume = true;
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        throw new Error("本次操作已被重置新用户取消");
       }
       // AgentSphere restores a paused Sandbox by rebuilding its runtime while
       // preserving the logical Sandbox ID. Recreate the non-persistent config
       // first so the image entrypoint can start the Gateway, then load the
       // persistent personality from the SFS-backed workspace for confirmation.
       await this.#saga.prepareSandbox({
-        sandboxId: this.#status.sandboxId,
-        instanceId: this.#status.instanceId,
-        traceId: this.#status.traceId,
+        sandboxId,
+        instanceId,
+        traceId,
         buildConfig: this.#buildConfig,
         cleanupOnFailure: false,
       });
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        throw new Error("本次操作已被重置新用户取消");
+      }
       const persistentSoul = await this.#saga.readPersistentSoul(
-        this.#status.sandboxId,
+        sandboxId,
       );
+      if (lifecycleRevision !== this.#lifecycleRevision) {
+        throw new Error("本次操作已被重置新用户取消");
+      }
       this.#soul = persistentSoul.content;
       this.#soulRestore = persistentSoul.content;
       this.#status = {
@@ -259,6 +302,7 @@ export class CloudConsoleController {
       };
       return this.getStatus();
     } catch (error) {
+      if (lifecycleRevision !== this.#lifecycleRevision) throw error;
       const dataSessionPending = connectedForResume && isMissingDataSession(error);
       if (connectedForResume && !dataSessionPending) {
         try {
@@ -278,9 +322,13 @@ export class CloudConsoleController {
   }
 
   async stopLobsterMode() {
-    if (this.#status.sandboxId) {
-      await this.#adapter.killSandbox(this.#status.sandboxId);
+    this.#lifecycleRevision += 1;
+    const sandboxId = this.#status.sandboxId;
+    const instanceId = this.#status.instanceId;
+    if (sandboxId) {
+      await this.#adapter.killSandbox(sandboxId);
     }
+    this.#simulator?.resetInstance?.(instanceId);
     return this.#clearLocalState();
   }
 
@@ -303,7 +351,9 @@ export class CloudConsoleController {
 
   resetNewUser({ skipSandboxCleanup = false } = {}) {
     if (!skipSandboxCleanup) return this.stopLobsterMode();
+    this.#lifecycleRevision += 1;
     const orphanedSandboxId = this.#status.sandboxId;
+    this.#simulator?.resetInstance?.(this.#status.instanceId);
     return this.#clearLocalState({
       cleanupSkipped: true,
       orphanedSandboxId,

@@ -2,6 +2,7 @@
 """Minimal JSON-lines bridge between the Node BFF and an E2B-compatible SDK."""
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -33,6 +34,7 @@ api_key = os.environ["E2B_API_KEY"]
 sandbox_url = os.environ.get("E2B_SANDBOX_URL")
 route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
+session_generations = {}
 data_session_wait_seconds = max(
     1.0, float(os.environ.get("E2B_DATA_SESSION_WAIT_SECONDS", "5"))
 )
@@ -75,9 +77,83 @@ def safe_error(error):
     return detail
 
 
+def value_fingerprint(value):
+    """Identify changing credentials without logging their plaintext value."""
+    if not isinstance(value, str) or not value:
+        return {"present": False, "length": 0, "sha256": None}
+    return {
+        "present": True,
+        "length": len(value),
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest()[:12],
+    }
+
+
+def connection_snapshot(sandbox_id):
+    """Describe control/data routing safely for correlating connect and file calls."""
+    if not sandbox_id or sandbox_id not in sessions:
+        return None
+    try:
+        claimed, data_session = sessions[sandbox_id]
+        config = data_session.connection_config
+        headers = dict(config.sandbox_headers or {})
+        token_headers = {
+            name: value_fingerprint(str(value))
+            for name, value in headers.items()
+            if any(marker in name.lower() for marker in ("token", "auth", "access"))
+        }
+        fixed_url = urlparse(sandbox_url) if sandbox_url else None
+        sandbox_id_header = next(
+            (value for name, value in headers.items() if name.lower() == "e2b-sandbox-id"),
+            None,
+        )
+        sandbox_port_header = next(
+            (value for name, value in headers.items() if name.lower() == "e2b-sandbox-port"),
+            None,
+        )
+        traffic_header = next(
+            (
+                value
+                for name, value in headers.items()
+                if name.lower() == "e2b-traffic-access-token"
+            ),
+            None,
+        )
+        envd_port = getattr(config, "envd_port", None)
+        traffic_token = getattr(claimed, "traffic_access_token", None)
+        return {
+            "sandboxId": sandbox_id,
+            "sessionGeneration": session_generations.get(sandbox_id, 0),
+            "claimedSandboxDomain": getattr(claimed, "sandbox_domain", None),
+            "routedSandboxDomain": getattr(data_session, "sandbox_domain", None),
+            "fixedSandboxUrlScheme": fixed_url.scheme if fixed_url else None,
+            "fixedSandboxUrlHost": fixed_url.hostname if fixed_url else None,
+            "fixedSandboxUrlPort": fixed_url.port if fixed_url else None,
+            "configuredRouteDomain": route_domain,
+            "envdPort": envd_port,
+            "trafficToken": value_fingerprint(traffic_token),
+            "envdToken": value_fingerprint(
+                getattr(claimed, "_envd_access_token", None)
+            ),
+            "headerNames": sorted(headers.keys(), key=str.lower),
+            "tokenHeaders": token_headers,
+            "sandboxIdHeaderMatches": str(sandbox_id_header) == sandbox_id,
+            "sandboxPortHeaderMatches": str(sandbox_port_header) == str(envd_port),
+            "trafficHeaderMatches": bool(traffic_token)
+            and traffic_header == traffic_token,
+        }
+    except Exception as error:
+        return {
+            "sandboxId": sandbox_id,
+            "sessionGeneration": session_generations.get(sandbox_id, 0),
+            "diagnosticError": type(error).__name__,
+        }
+
+
 def routed(session):
     traffic_token = session.traffic_access_token
-    if not route_domain and not traffic_token:
+    # A fixed sandbox URL also needs explicit routing headers. Unlike the
+    # standard E2B hostname, it does not encode the Sandbox ID in the host.
+    if not sandbox_url and not route_domain and not traffic_token:
         return session
     original = session.connection_config
     sandbox_headers = original.sandbox_headers
@@ -115,6 +191,7 @@ def session_for(sandbox_id):
     if sandbox_id not in sessions:
         claimed = Sandbox.connect(sandbox_id, **control_api_options())
         sessions[sandbox_id] = (claimed, routed(claimed))
+        session_generations[sandbox_id] = session_generations.get(sandbox_id, 0) + 1
     return sessions[sandbox_id]
 
 
@@ -122,6 +199,7 @@ def connect_session(sandbox_id):
     """Resume once and replace stale data-plane routing with connect results."""
     claimed = Sandbox.connect(sandbox_id, **control_api_options())
     sessions[sandbox_id] = (claimed, routed(claimed))
+    session_generations[sandbox_id] = session_generations.get(sandbox_id, 0) + 1
     return sessions[sandbox_id]
 
 
@@ -157,6 +235,7 @@ def dispatch(op, params):
             **control_api_options(),
         )
         sessions[claimed.sandbox_id] = (claimed, routed(claimed))
+        session_generations[claimed.sandbox_id] = 1
         return {"sandboxId": claimed.sandbox_id}
 
     sandbox_id = params["sandboxId"]
@@ -172,6 +251,7 @@ def dispatch(op, params):
         claimed, _ = session_for(sandbox_id)
         claimed.kill()
         sessions.pop(sandbox_id, None)
+        session_generations.pop(sandbox_id, None)
         return {"killed": True}
 
     _, session = session_for(sandbox_id)
@@ -207,6 +287,7 @@ def dispatch(op, params):
 
 for line in sys.stdin:
     request = None
+    started_at = time.monotonic()
     try:
         request = json.loads(line)
         result = dispatch(request["op"], request.get("params", {}))
@@ -216,4 +297,14 @@ for line in sys.stdin:
             "id": request.get("id") if isinstance(request, dict) else None,
             "error": safe_error(error),
         }
+    if isinstance(request, dict):
+        params = request.get("params", {})
+        result = response.get("result", {})
+        sandbox_id = params.get("sandboxId") or result.get("sandboxId")
+        diagnostic = connection_snapshot(sandbox_id)
+        if diagnostic:
+            response["diagnostic"] = {
+                **diagnostic,
+                "elapsedMs": round((time.monotonic() - started_at) * 1000),
+            }
     print(json.dumps(response, separators=(",", ":")), flush=True)

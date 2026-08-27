@@ -19,6 +19,10 @@ function deferred(timeoutMs, label) {
       clearTimeout(timer);
       resolve(value);
     },
+    reject(error) {
+      clearTimeout(timer);
+      reject(error);
+    },
   };
 }
 
@@ -49,6 +53,26 @@ export class WsPlatformSimulator {
 
   revokeBootstrapToken(instanceId) {
     this.#core.revokeBootstrapToken(instanceId);
+  }
+
+  resetInstance(instanceId) {
+    if (!instanceId) return;
+    const resetError = new Error(`channel instance ${instanceId} was reset`);
+    const connection = this.#connections.get(instanceId);
+    this.#connections.delete(instanceId);
+    connection?.socket.close(1000, "session reset");
+    for (const waiter of this.#connectionWaiters.get(instanceId) ?? []) {
+      waiter.reject(resetError);
+    }
+    this.#connectionWaiters.delete(instanceId);
+    for (const waiter of this.#outboundWaiters.values()) waiter.reject(resetError);
+    this.#outboundWaiters.clear();
+    for (const waiter of this.#nextOutboundWaiters) waiter.reject(resetError);
+    this.#nextOutboundWaiters.length = 0;
+    this.#unconsumedOutbound = this.#unconsumedOutbound.filter(
+      (event) => event.instanceId !== instanceId,
+    );
+    this.#core.resetInstance(instanceId);
   }
 
   start() {

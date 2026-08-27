@@ -29,11 +29,13 @@ function defaultLogger(record) {
 
 class PythonBridge {
   #child;
+  #logger;
   #pending = new Map();
   #requestTimeoutMs;
 
   constructor({ pythonPath, bridgePath, spawnImpl, env, requestTimeoutMs, logger }) {
     this.#requestTimeoutMs = requestTimeoutMs;
+    this.#logger = logger;
     this.#child = spawnImpl(pythonPath, [bridgePath], {
       env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -78,6 +80,16 @@ class PythonBridge {
     if (!pending) return;
     this.#pending.delete(response.id);
     clearTimeout(pending.timer);
+    if (response.diagnostic) {
+      this.#logger({
+        level: response.error ? "error" : "info",
+        event: "e2b.bridge.routing_snapshot",
+        operation: pending.op,
+        outcome: response.error ? "failed" : "succeeded",
+        durationMs: Date.now() - pending.startedAt,
+        routing: response.diagnostic,
+      });
+    }
     if (response.error) {
       const error = new Error(response.error.message || "E2B bridge operation failed");
       error.code = response.error.code;
@@ -110,7 +122,13 @@ class PythonBridge {
         reject(new Error(`E2B bridge timed out during ${op}`));
       }, this.#requestTimeoutMs);
       timer.unref?.();
-      this.#pending.set(id, { resolve, reject, timer });
+      this.#pending.set(id, {
+        resolve,
+        reject,
+        timer,
+        op,
+        startedAt: Date.now(),
+      });
       this.#child.stdin.write(`${JSON.stringify({ id, op, params })}\n`, (error) => {
         if (!error) return;
         clearTimeout(timer);

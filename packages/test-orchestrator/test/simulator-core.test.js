@@ -84,3 +84,30 @@ test("session token reconnects only the original instance and account", () => {
     /does not belong/,
   );
 });
+
+test("resetInstance revokes bootstrap and session tokens for only that instance", () => {
+  const simulator = new ChannelPlatformSimulator();
+  simulator.issueBootstrapToken("old-instance", "old-bootstrap");
+  simulator.issueBootstrapToken("other-instance", "other-bootstrap");
+  const oldSession = simulator.register({
+    instanceId: "old-instance",
+    accountId: "default",
+    bootstrapToken: "old-bootstrap",
+    pluginVersion: "0.1.0",
+  });
+
+  simulator.resetInstance("old-instance");
+
+  assert.throws(() => simulator.reconnect({
+    instanceId: "old-instance",
+    accountId: "default",
+    sessionToken: oldSession.sessionToken,
+    pluginVersion: "0.1.0",
+  }), /invalid channel session token/);
+  assert.doesNotThrow(() => simulator.register({
+    instanceId: "other-instance",
+    accountId: "default",
+    bootstrapToken: "other-bootstrap",
+    pluginVersion: "0.1.0",
+  }));
+});

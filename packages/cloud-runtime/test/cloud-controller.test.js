@@ -42,6 +42,11 @@ function fixture() {
   const controller = new CloudConsoleController({
     adapter,
     saga,
+    simulator: {
+      resetInstance(instanceId) {
+        calls.push(["reset-channel", instanceId]);
+      },
+    },
     instanceIdFactory: () => "instance-1",
     traceIdFactory: () => "trace-1",
     defaultSoul: "# Default lobster",
@@ -190,7 +195,7 @@ test("a failed resume remains paused so the user can retry connect", async () =>
   assert.equal(controller.getStatus().connectionId, "connection-2");
 });
 
-test("missing resumed data session retries preparation, then reads SFS without reconnecting", async () => {
+test("missing resumed data session reconnects before retrying preparation", async () => {
   const calls = [];
   let prepareAttempts = 0;
   const controller = new CloudConsoleController({
@@ -241,6 +246,7 @@ test("missing resumed data session retries preparation, then reads SFS without r
     ["pause", "sandbox-1"],
     ["connect", "sandbox-1"],
     ["prepare", 2],
+    ["connect", "sandbox-1"],
     ["prepare", 3],
     ["read-soul"],
   ]);
@@ -254,7 +260,10 @@ test("stop kills the cloud Sandbox and resets the serial flow", async () => {
 
   assert.equal(status.mode, "idle");
   assert.equal(status.currentStep, "mode");
-  assert.deepEqual(calls.at(-1), ["kill", "sandbox-1"]);
+  assert.deepEqual(calls.slice(-2), [
+    ["kill", "sandbox-1"],
+    ["reset-channel", "instance-1"],
+  ]);
 });
 
 test("resetNewUser uses cloud cleanup and returns to onboarding", async () => {
@@ -267,7 +276,10 @@ test("resetNewUser uses cloud cleanup and returns to onboarding", async () => {
   assert.equal(reset.mode, "idle");
   assert.equal(reset.currentStep, "mode");
   assert.equal(reset.soulConfirmed, false);
-  assert.deepEqual(calls.at(-1), ["kill", "sandbox-1"]);
+  assert.deepEqual(calls.slice(-2), [
+    ["kill", "sandbox-1"],
+    ["reset-channel", "instance-1"],
+  ]);
 });
 
 test("resetNewUser can abandon an undeletable Sandbox and continue onboarding", async () => {
@@ -280,4 +292,38 @@ test("resetNewUser can abandon an undeletable Sandbox and continue onboarding", 
   assert.equal(reset.cleanupSkipped, true);
   assert.equal(reset.orphanedSandboxId, "sandbox-1");
   assert.equal(calls.some(([name]) => name === "kill"), false);
+  assert.deepEqual(calls.at(-1), ["reset-channel", "instance-1"]);
+});
+
+test("an in-flight bootstrap cannot restore stale state after reset", async () => {
+  let finishBootstrap;
+  const bootstrapPending = new Promise((resolve) => {
+    finishBootstrap = resolve;
+  });
+  const controller = new CloudConsoleController({
+    adapter: {
+      async createSandbox() { return { sandboxId: "sandbox-1" }; },
+      async killSandbox() {},
+    },
+    saga: {
+      async prepareSandbox() {},
+      async bootstrapSandbox() {
+        await bootstrapPending;
+        return { connectionId: "stale-connection" };
+      },
+    },
+    simulator: { resetInstance() {} },
+    instanceIdFactory: () => "instance-1",
+    traceIdFactory: () => "trace-1",
+    buildConfig: () => ({}),
+  });
+  await controller.startLobsterMode();
+  const confirming = controller.confirmSoul("# Pending");
+
+  const reset = await controller.resetNewUser();
+  finishBootstrap();
+
+  await assert.rejects(confirming, /重置新用户取消/);
+  assert.equal(reset.mode, "idle");
+  assert.deepEqual(controller.getStatus(), reset);
 });

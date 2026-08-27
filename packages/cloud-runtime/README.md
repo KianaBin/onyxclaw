@@ -32,8 +32,8 @@ APP 为每个 Sandbox 生成独立的配置对象，直接写入
 `${homeDir}/.openclaw/openclaw.json`。workspace 路径来自 Provider Profile，可以通过
 Sandbox metadata 挂载到持久存储。所有 E2B-compatible Provider 在 pause 后都保留 Node
 wrapper。恢复时只调用一次 `Sandbox.connect(sandbox_id)`，并使用其返回的新 Sandbox
-对象替换 Python claimed/routed 缓存，以刷新重建运行时对应的 domain、traffic token 和
-envd token；后续 Files、Commands 和 kill 使用刷新后的缓存，不再隐式 connect。进程重启
+对象替换 Python claimed/routed 缓存，以刷新恢复后 Gateway data session 对应的 domain、
+traffic token 和 envd token；后续 Files、Commands 和 kill 使用刷新后的缓存，不再隐式 connect。进程重启
 导致缓存丢失时，首次 `session_for()` 同样用 connect 返回值重新接管并建立本地缓存。
 
 控制面与数据面鉴权严格分离：`create/connect/pause/kill` 只使用 E2B API Key；数据面

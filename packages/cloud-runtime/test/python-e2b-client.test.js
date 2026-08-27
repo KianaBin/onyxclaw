@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { createPythonE2BClientFactory } from "../src/python-e2b-client.js";
 
-function fakeSpawner() {
+function fakeSpawner({ diagnostic } = {}) {
   const calls = [];
   const requests = [];
   const spawnImpl = (command, args, options) => {
@@ -30,7 +30,11 @@ function fakeSpawner() {
           kill: { killed: true },
         };
         queueMicrotask(() => {
-          child.stdout.write(`${JSON.stringify({ id: request.id, result: results[request.op] })}\n`);
+          child.stdout.write(`${JSON.stringify({
+            id: request.id,
+            result: results[request.op],
+            ...(diagnostic ? { diagnostic } : {}),
+          })}\n`);
         });
         callback();
       },
@@ -95,6 +99,57 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
   ]);
 });
 
+test("logs safe routing snapshots that correlate connect and data operations", async () => {
+  const diagnostic = {
+    sandboxId: "sandbox-1",
+    sessionGeneration: 2,
+    claimedSandboxDomain: "dynamic.example.internal",
+    fixedSandboxUrlHost: "gateway.example.internal",
+    fixedSandboxUrlPort: 49983,
+    trafficToken: { present: true, length: 20, sha256: "0123456789ab" },
+    envdToken: { present: true, length: 24, sha256: "abcdef012345" },
+    headerNames: ["E2b-Sandbox-Id", "E2B-Traffic-Access-Token"],
+    sandboxIdHeaderMatches: true,
+    sandboxPortHeaderMatches: true,
+    trafficHeaderMatches: true,
+    elapsedMs: 17,
+  };
+  const fake = fakeSpawner({ diagnostic });
+  const logs = [];
+  const client = createPythonE2BClientFactory({
+    spawnImpl: fake.spawnImpl,
+    logger: (record) => logs.push(record),
+  })({
+    apiKey: "runtime-secret",
+    baseUrl: "http://127.0.0.1:18081",
+    requestTimeoutMs: 1000,
+  });
+
+  const session = await client.connect("sandbox-1");
+  await session.writeFile("/tmp/openclaw.json", "{}");
+
+  assert.deepEqual(logs.map((record) => ({
+    event: record.event,
+    operation: record.operation,
+    outcome: record.outcome,
+    generation: record.routing.sessionGeneration,
+  })), [
+    {
+      event: "e2b.bridge.routing_snapshot",
+      operation: "connect",
+      outcome: "succeeded",
+      generation: 2,
+    },
+    {
+      event: "e2b.bridge.routing_snapshot",
+      operation: "writeFile",
+      outcome: "succeeded",
+      generation: 2,
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(logs), /runtime-secret/);
+});
+
 test("surfaces detailed bridge errors and logs redacted bridge stderr", async () => {
   const fake = fakeSpawner();
   const logs = [];
@@ -114,6 +169,11 @@ test("surfaces detailed bridge errors and logs redacted bridge stderr", async ()
             message: "invalid credential",
             statusCode: 401,
             requestId: "cloud-request-1",
+          },
+          diagnostic: {
+            sandboxId: "sandbox-1",
+            sessionGeneration: 3,
+            trafficToken: { present: true, length: 20, sha256: "0123456789ab" },
           },
         })}\n`));
         callback();
@@ -138,8 +198,12 @@ test("surfaces detailed bridge errors and logs redacted bridge stderr", async ()
     assert.equal(error.requestId, "cloud-request-1");
     return true;
   });
-  assert.equal(logs[0].event, "e2b.bridge.stderr");
-  assert.match(logs[0].message, /\[REDACTED\]/);
+  const stderrLog = logs.find(({ event }) => event === "e2b.bridge.stderr");
+  assert.match(stderrLog.message, /\[REDACTED\]/);
+  const routingLog = logs.find(({ event }) => event === "e2b.bridge.routing_snapshot");
+  assert.equal(routingLog.operation, "create");
+  assert.equal(routingLog.outcome, "failed");
+  assert.equal(routingLog.routing.sessionGeneration, 3);
   assert.doesNotMatch(JSON.stringify(logs), /runtime-secret/);
 });
 
@@ -157,6 +221,10 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /"E2b-Sandbox-Id"\] = session\.sandbox_id/);
   assert.match(source, /"E2b-Sandbox-Port"\] = str\(original\.envd_port\)/);
   assert.match(source, /traffic_access_token/);
+  assert.match(source, /def connection_snapshot\(sandbox_id\):/);
+  assert.match(source, /sessionGeneration/);
+  assert.match(source, /hashlib\.sha256/);
+  assert.match(source, /response\["diagnostic"\]/);
   assert.match(source, /"create"|op == "create"/);
   assert.match(source, /"connect"|op == "connect"/);
   assert.match(source, /"command"|op == "command"/);
@@ -201,7 +269,7 @@ test("Python bridge applies the provider patch before E2B import and returns saf
     connectSessionBlock,
     /sessions\[sandbox_id\] = \(claimed, routed\(claimed\)\)/,
   );
-  assert.doesNotMatch(connectSessionBlock, /original = sessions\[sandbox_id\]/);
+  assert.match(source, /if not sandbox_url and not route_domain and not traffic_token:/);
   const killBlock = source.slice(
     source.indexOf('if op == "kill":'),
     source.indexOf('_, session = session_for(sandbox_id)'),
