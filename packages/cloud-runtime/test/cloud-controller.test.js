@@ -113,7 +113,7 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
   assert.equal(status.mode, "connected");
 });
 
-test("resume starts OpenClaw before waiting for persistent SOUL confirmation", async () => {
+test("resume starts OpenClaw and reuses the APP personality without reading SFS", async () => {
   const { calls, controller } = fixture();
   await controller.startLobsterMode();
   await controller.confirmSoul("# Persistent lobster");
@@ -127,11 +127,10 @@ test("resume starts OpenClaw before waiting for persistent SOUL confirmation", a
   assert.equal(resumed.currentStep, "soul");
   assert.equal(resumed.soulConfirmed, false);
   assert.equal(resumed.connectionId, null);
-  assert.equal(controller.getSoul().content, "# Soul restored from SFS Turbo");
-  assert.deepEqual(calls.slice(-4).map(([name]) => name), [
+  assert.equal(controller.getSoul().content, "# Persistent lobster");
+  assert.deepEqual(calls.slice(-3).map(([name]) => name), [
     "pause",
     "connect",
-    "read-soul",
     "prepare",
   ]);
   assert.equal(calls.at(-1)[1].cleanupOnFailure, false);
@@ -139,10 +138,9 @@ test("resume starts OpenClaw before waiting for persistent SOUL confirmation", a
 
   await controller.confirmSoul("# Confirmed persistent soul");
   assert.equal(controller.getStatus().mode, "connected");
-  assert.deepEqual(calls.slice(-5).map(([name]) => name), [
+  assert.deepEqual(calls.slice(-4).map(([name]) => name), [
     "pause",
     "connect",
-    "read-soul",
     "prepare",
     "bootstrap",
   ]);
@@ -190,9 +188,9 @@ test("a failed resume remains paused so the user can retry connect", async () =>
   assert.equal(controller.getStatus().connectionId, "connection-2");
 });
 
-test("missing resumed data session stays running and retries read without connect or pause", async () => {
+test("missing resumed data session retries config preparation without connect, pause, or SFS read", async () => {
   const calls = [];
-  let readAttempts = 0;
+  let prepareAttempts = 0;
   const controller = new CloudConsoleController({
     adapter: {
       async createSandbox() {
@@ -207,16 +205,20 @@ test("missing resumed data session stays running and retries read without connec
     },
     saga: {
       async prepareSandbox() {
-        calls.push(["prepare"]);
+        prepareAttempts += 1;
+        calls.push(["prepare", prepareAttempts]);
+        if (prepareAttempts === 2) {
+          const error = new Error("OpenClaw bootstrap failed during PREPARING", {
+            cause: new Error("Session ID not found"),
+          });
+          throw error;
+        }
       },
       async bootstrapSandbox() {
         return { connectionId: "connection-3" };
       },
       async readPersistentSoul() {
-        readAttempts += 1;
-        calls.push(["read-soul", readAttempts]);
-        if (readAttempts === 1) throw new Error("Session not found");
-        return { content: "# Persistent", size: 12, sha256: "hash" };
+        calls.push(["unexpected-read-soul"]);
       },
     },
     buildConfig: () => ({}),
@@ -226,18 +228,17 @@ test("missing resumed data session stays running and retries read without connec
   calls.length = 0;
   await controller.pauseLobsterMode();
 
-  await assert.rejects(controller.resumeLobsterMode(), /Session not found/);
+  await assert.rejects(controller.resumeLobsterMode(), /PREPARING/);
   assert.equal(controller.getStatus().mode, "resume-data-pending");
-  assert.deepEqual(calls.map(([name]) => name), ["pause", "connect", "read-soul"]);
+  assert.deepEqual(calls, [["pause", "sandbox-1"], ["connect", "sandbox-1"], ["prepare", 2]]);
 
   const retried = await controller.resumeLobsterMode();
   assert.equal(retried.mode, "resume-confirmation");
-  assert.deepEqual(calls.map(([name]) => name), [
-    "pause",
-    "connect",
-    "read-soul",
-    "read-soul",
-    "prepare",
+  assert.deepEqual(calls, [
+    ["pause", "sandbox-1"],
+    ["connect", "sandbox-1"],
+    ["prepare", 2],
+    ["prepare", 3],
   ]);
 });
 

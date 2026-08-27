@@ -26,12 +26,24 @@ const baseConfig = JSON.parse(baseConfigSource);
 
 const registry = await loadProviderRegistry({ configPath: providerConfigPath });
 const providerId = registry.defaultProviderId;
-const provider = registry.getProvider(providerId);
+const configuredProvider = registry.getProvider(providerId);
+const sandboxUrlOverride = process.env.ONYXCLAW_E2B_SANDBOX_URL?.trim();
+const provider = sandboxUrlOverride
+  ? {
+      ...configuredProvider,
+      api: {
+        ...configuredProvider.api,
+        sandboxUrl: sandboxUrlOverride,
+      },
+    }
+  : configuredProvider;
 const secrets = registry.getSecrets(providerId);
 const operationMonitor = createSandboxServiceMonitor();
 const adapter = createE2BCompatibleAdapter({
   registry,
   providerId,
+  provider,
+  secrets,
   clientFactory: createPythonE2BClientFactory(),
   operationMonitor,
 });

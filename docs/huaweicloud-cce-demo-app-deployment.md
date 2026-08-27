@@ -10,28 +10,27 @@
 - Kubernetes：`v1.33.12`
 - 节点架构：`linux/amd64`
 - Namespace：`onyxclaw-demo`
-- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-start-ui-v7`
-- APP 镜像 digest：`sha256:c3c0ee14d457f6664806f2e487590163682c63cb7b016527caa7b16d18e9d3fa`
-- 已核验镜像摘要：`sha256:c3c0ee14d457f6664806f2e487590163682c63cb7b016527caa7b16d18e9d3fa`
+- APP 镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-sandbox3-v10`
+- APP 镜像 digest：`sha256:0f998649c05d8b1ed2329427630d82bdeef7fab3306f169ee7af57bd1631f714`
+- 已核验镜像摘要：`sha256:0f998649c05d8b1ed2329427630d82bdeef7fab3306f169ee7af57bd1631f714`
 - 模拟 APP HTTP Service：`NodePort 30080`
 - Channel 集群内 Service：`ClusterIP:18890`
 - Channel 私网 ELB：`192.168.2.13:18890`（后端 NodePort `192.168.2.246:31965`）
 
 部署清单位于 [`deploy/huaweicloud-cce/onyxclaw-app-demo.yaml`](../deploy/huaweicloud-cce/onyxclaw-app-demo.yaml)。
 
-## 当前部署结果（2026-08-26 更新）
+## 当前部署结果（2026-08-27 更新）
 
 - `Deployment/onyxclaw-app`：`1/1 Ready`、`1/1 Available`
 - APP Pod：`Running`、容器重启次数 `0`
-- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:c3c0ee14d457f6664806f2e487590163682c63cb7b016527caa7b16d18e9d3fa`
-- Deployment generation：`44`；恢复后会在展示持久化 SOUL 供确认前写入
-  `openclaw.json` 并启动 OpenClaw；System Architecture 已改为全宽布局并移除
-  API Objects 卡片
+- 实际镜像：`swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app@sha256:0f998649c05d8b1ed2329427630d82bdeef7fab3306f169ee7af57bd1631f714`
+- Deployment generation：`50`；恢复后不再读取 SFS Turbo 中的 `SOUL.md`，而是立即
+  重建 `openclaw.json` 并启动 OpenClaw，再展示 APP 内存中保留的性格供用户确认
 - `/api/status`：返回 `mode: idle`，健康检查通过
 - `/api/ui-config`：已确认 `deploymentMode: cloud`、`providerId: huaweicloud-agentsphere`、`region: cn-south-1`
 - 公网 NodePort：已从集群外验证 `http://113.45.154.231:30080` 可达
 - AgentSphere API Endpoint：已配置为 `https://agentsphere.cn-south-1.myhuaweicloud.com`
-- Sandbox 数据面 Endpoint：已配置为 `https://agent-gateway-sandbox-muyden3dgi.agentgateway.cn-south-1.huaweicloud-agentnetwork.com`
+- Sandbox 数据面 Endpoint：通过 Deployment 环境变量配置为 `https://agent-gateway-sandbox3-geywmobqmy.agentgateway.cn-south-1.huaweicloud-agentnetwork.com`；ConfigMap 未修改
 - E2B API Key：已通过 Kubernetes Secret 注入，本文和部署清单不记录其值
 - E2B SDK 验证：早期验收成功；本轮再次验证时 `Sandbox.list` 与 `Sandbox.create`
   均返回 `403 sandbox.auth.0001`。CCE Secret 与提供值的 SHA-256 一致，需在
@@ -118,9 +117,9 @@ Cloud APP 在进程启动时会校验 Provider Profile，并要求基础 OpenCla
 | 配置 | 当前值 | 行为 |
 | --- | --- | --- |
 | Sandbox API | `https://agentsphere.cn-south-1.myhuaweicloud.com` | bridge 显式传入 `api_url`，不会再由 SDK 拼接 `api.` 前缀 |
-| Sandbox 数据面 | `https://agent-gateway-sandbox-muyden3dgi.agentgateway.cn-south-1.huaweicloud-agentnetwork.com` | 通过 `api.sandboxUrl` 映射为 SDK 的 `E2B_SANDBOX_URL`；DNS/TLS 可达 |
+| Sandbox 数据面 | `https://agent-gateway-sandbox3-geywmobqmy.agentgateway.cn-south-1.huaweicloud-agentnetwork.com` | 通过 Deployment 的 `ONYXCLAW_E2B_SANDBOX_URL` 覆盖，不修改 ConfigMap |
 | Channel 回连 URL | `ws://192.168.2.13:18890/connect` | ELB VIP 使用 Service port；API Key 恢复后需从 Sandbox 再验 WebSocket 回连 |
-| Sandbox Template | `c4711224-04d5-4875-a934-47a4007db35e` | 对应 `0.3.8-channel-error-fix` 派生镜像 |
+| Sandbox Template | `7e9cd91f-dbf9-42dd-8eea-f6e9b4ed5788` | 控制台名称 `template-sfs-4-lt`；保持 ConfigMap 当前配置 |
 | Model Provider / ID | `deepseek` / `deepseek-v4-flash` | Provider 已配置 |
 | E2B API Key | Kubernetes Secret 中的真实值 | 已配置，不写入 Git |
 | 模型 API Key | Kubernetes Secret 中的真实值 | 已配置，不写入 Git 或备份文件 |
@@ -151,9 +150,9 @@ E2B `Sandbox.create`：
 3. bootstrap：用户确认 SOUL 后只写 `/home/node/.openclaw/workspace/SOUL.md`，等待 Gateway 和 Channel；
 4. pause：页面调用 E2B `Sandbox.pause`；
 5. resume：页面复用 create 时保留的 Python Sandbox、traffic/envd token 和 Node wrapper，
-   不重新创建 E2B session；读取持久化 SOUL 后立即重新签发一次性 Channel token、重建
-   非持久化 `openclaw.json` 以启动 OpenClaw，再展示 SOUL 供用户确认；确认后只执行
-   SOUL 写入和 Gateway/Channel 就绪等待。
+   不重新创建 E2B session，也不读取 SFS Turbo 中的 `SOUL.md`；恢复后立即重新签发一次性
+   Channel token、重建非持久化 `openclaw.json` 以启动 OpenClaw，再展示 APP 内存中保留的
+   SOUL 供用户确认；确认后只执行 SOUL 写入和 Gateway/Channel 就绪等待。
 
 SFS 仅挂载 workspace，因此会持久化 `SOUL.md` 和 workspace 中其他 Markdown 文件；包含模型
 和 Channel token 的 `openclaw.json` 仍留在 Sandbox 本地文件系统，不写入 SFS。
@@ -177,15 +176,20 @@ Agent Gateway 还要求每次 Sandbox 数据面请求携带 create 响应中的
 API Key 只用于控制面，不用于 Sandbox Gateway 鉴权。
 
 所有 E2B-compatible Provider 的 pause 成功后都不会删除 Python `sessions[sandbox_id]` 或
-Node `#sessions[id]`。恢复命中缓存时只调用一次 `Sandbox.connect(sandbox_id)`，丢弃该调用
-返回的新对象，并继续复用 create 得到的原 claimed/routed、traffic token 和 envd token。
-后续 Files、Commands 和 kill 只调用 `session_for()` 获取缓存，不再次 connect。
+Node `#sessions[id]`。恢复命中缓存时只调用一次 `Sandbox.connect(sandbox_id)`，并用返回的
+新对象替换 Python claimed/routed 缓存，刷新 domain、traffic token 和 envd token。后续
+Files、Commands 和 kill 只调用 `session_for()` 获取刷新后的缓存，不再次 connect。
+
+固定 Agent Gateway 地址不会像标准 E2B 子域名那样在 hostname 中携带 Sandbox ID。routed
+数据面因此除 `E2B-Traffic-Access-Token` 和 envd `X-Access-Token` 外，还显式发送
+`E2b-Sandbox-Id: <sandboxId>` 与 `E2b-Sandbox-Port: 49983`。缺少这两个 header 时，create
+后的数据面可能可用，但 pause/connect 后会持续返回 `Session ID not found`。
 
 恢复后第一个 envd 请求仍可能短暂返回 `Session ID not found` 或 `Session not found`。bridge
 会针对这两种等价错误在 45 秒窗口内退避重试。若窗口结束后仍失败，APP 不再调用 pause，
 而是保留已经 connect
-成功的运行状态并进入 `resume-data-pending`；页面显示“重试恢复”，再次点击只重试数据面
-`Files.read`，不会重新创建 session。
+成功的运行状态并进入 `resume-data-pending`；页面显示“重试恢复”，再次点击只重试写入
+`openclaw.json` 和启动 OpenClaw，不会重新 connect、pause 或读取 SFS。
 
 对话侧，Channel 现在会捕获 OpenClaw 模型生成异常并发送一条明确的 outbound 错误消息。
 因此模型网络或 Provider 配置异常时，APP 不再只显示

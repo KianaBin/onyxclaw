@@ -287,13 +287,14 @@ export class E2BCompatibleAdapter {
 export function createE2BCompatibleAdapter({
   registry,
   providerId = registry.defaultProviderId,
+  provider,
   clientFactory,
   operationMonitor,
   logger,
 }) {
   return new E2BCompatibleAdapter({
     providerId,
-    provider: registry.getProvider(providerId),
+    provider: provider ?? registry.getProvider(providerId),
     secrets: registry.getSecrets(providerId),
     clientFactory,
     operationMonitor,

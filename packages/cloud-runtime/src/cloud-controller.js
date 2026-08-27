@@ -11,9 +11,13 @@ function soulFile(content) {
 }
 
 function isMissingDataSession(error) {
-  return /session(?: id)? not found/i.test(
-    error instanceof Error ? error.message : String(error),
-  );
+  let current = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    const message = current instanceof Error ? current.message : String(current);
+    if (/session(?: id)? not found/i.test(message)) return true;
+    current = current instanceof Error ? current.cause : null;
+  }
+  return false;
 }
 
 export class CloudConsoleController {
@@ -230,14 +234,11 @@ export class CloudConsoleController {
         await this.#adapter.connectSandbox(this.#status.sandboxId);
         connectedForResume = true;
       }
-      const persistentSoul = await this.#saga.readPersistentSoul(
-        this.#status.sandboxId,
-      );
       // AgentSphere restores a paused Sandbox by rebuilding its runtime while
-      // preserving the logical Sandbox ID and SFS-backed workspace. Recreate
-      // the non-persistent config now so the image entrypoint can start the
-      // Gateway while the user reviews the persisted SOUL.md. Confirmation
-      // only writes SOUL.md and completes the readiness/channel bootstrap.
+      // preserving the logical Sandbox ID. Recreate the non-persistent config
+      // immediately so the image entrypoint can start the Gateway. Keep using
+      // the personality already held by the APP instead of blocking recovery
+      // on a read from the SFS-backed workspace.
       await this.#saga.prepareSandbox({
         sandboxId: this.#status.sandboxId,
         instanceId: this.#status.instanceId,
@@ -245,8 +246,6 @@ export class CloudConsoleController {
         buildConfig: this.#buildConfig,
         cleanupOnFailure: false,
       });
-      this.#soul = persistentSoul.content;
-      this.#soulRestore = persistentSoul.content;
       this.#status = {
         ...this.#status,
         mode: "resume-confirmation",

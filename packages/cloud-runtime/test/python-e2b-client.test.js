@@ -154,6 +154,8 @@ test("Python bridge applies the provider patch before E2B import and returns saf
   assert.match(source, /"api_url": api_url/);
   assert.match(source, /sandbox_url=sandbox_url/);
   assert.match(source, /"E2B-Traffic-Access-Token"/);
+  assert.match(source, /"E2b-Sandbox-Id"\] = session\.sandbox_id/);
+  assert.match(source, /"E2b-Sandbox-Port"\] = str\(original\.envd_port\)/);
   assert.match(source, /traffic_access_token/);
   assert.match(source, /"create"|op == "create"/);
   assert.match(source, /"connect"|op == "connect"/);
@@ -187,6 +189,19 @@ test("Python bridge applies the provider patch before E2B import and returns saf
     source.indexOf('if op == "kill":'),
   );
   assert.match(connectBlock, /connect_session\(sandbox_id\)/);
+  const connectSessionBlock = source.slice(
+    source.indexOf("def connect_session(sandbox_id):"),
+    source.indexOf("def run_data_operation("),
+  );
+  assert.match(
+    connectSessionBlock,
+    /claimed = Sandbox\.connect\(sandbox_id, \*\*control_api_options\(\)\)/,
+  );
+  assert.match(
+    connectSessionBlock,
+    /sessions\[sandbox_id\] = \(claimed, routed\(claimed\)\)/,
+  );
+  assert.doesNotMatch(connectSessionBlock, /original = sessions\[sandbox_id\]/);
   const killBlock = source.slice(
     source.indexOf('if op == "kill":'),
     source.indexOf('_, session = session_for(sandbox_id)'),

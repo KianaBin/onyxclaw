@@ -56,6 +56,8 @@ def routed(session, sandbox_url):
     headers = original.sandbox_headers
     if session.traffic_access_token:
         headers["E2B-Traffic-Access-Token"] = session.traffic_access_token
+    headers["E2b-Sandbox-Id"] = session.sandbox_id
+    headers["E2b-Sandbox-Port"] = "49983"
     config = ConnectionConfig(
         domain=original.domain,
         debug=original.debug,
@@ -124,6 +126,11 @@ def main():
     parser.add_argument("--api-url", default="https://agentsphere.cn-south-1.myhuaweicloud.com")
     parser.add_argument("--sandbox-url", required=True)
     parser.add_argument("--keep", action="store_true")
+    parser.add_argument(
+        "--verify-resume-only",
+        action="store_true",
+        help="verify create/files/pause/connect/files without running OpenClaw probes",
+    )
     args = parser.parse_args()
 
     api_key = required_env("HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY")
@@ -166,6 +173,23 @@ def main():
             "sha256": hashlib.sha256(readback.encode()).hexdigest(),
             "matchesGenerated": readback == config_text,
         }))
+
+        if args.verify_resume_only:
+            Sandbox.pause(claimed.sandbox_id, **control)
+            print(json.dumps({"sandboxId": claimed.sandbox_id, "stage": "paused"}))
+            claimed = Sandbox.connect(claimed.sandbox_id, **control)
+            session = routed(claimed, args.sandbox_url)
+            resume_path = "/tmp/onyxclaw-resume-diagnostic.txt"
+            resume_content = "resume-data-session-ready\n"
+            session.files.write(resume_path, resume_content, user="node")
+            resume_readback = session.files.read(resume_path, user="node")
+            print(json.dumps({
+                "sandboxId": claimed.sandbox_id,
+                "stage": "resumed-files",
+                "path": resume_path,
+                "matchesWritten": resume_readback == resume_content,
+            }))
+            return
 
         secrets = (api_key, model_api_key)
         run(session, "node /app/openclaw.mjs config validate", secrets)

@@ -83,6 +83,11 @@ def routed(session):
     sandbox_headers = original.sandbox_headers
     if traffic_token:
         sandbox_headers["E2B-Traffic-Access-Token"] = traffic_token
+    # A fixed Agent Gateway URL no longer carries the Sandbox identity in its
+    # hostname. Forward the same routing headers used by the E2B connect API so
+    # the gateway session ID remains identical to the logical Sandbox ID.
+    sandbox_headers["E2b-Sandbox-Id"] = session.sandbox_id
+    sandbox_headers["E2b-Sandbox-Port"] = str(original.envd_port)
     connection_config = ConnectionConfig(
         domain=original.domain,
         debug=original.debug,
@@ -114,12 +119,10 @@ def session_for(sandbox_id):
 
 
 def connect_session(sandbox_id):
-    """Resume once, then keep using the create-time claimed/routed objects."""
-    if sandbox_id not in sessions:
-        return session_for(sandbox_id)
-    original = sessions[sandbox_id]
-    Sandbox.connect(sandbox_id, **control_api_options())
-    return original
+    """Resume once and replace stale data-plane routing with connect results."""
+    claimed = Sandbox.connect(sandbox_id, **control_api_options())
+    sessions[sandbox_id] = (claimed, routed(claimed))
+    return sessions[sandbox_id]
 
 
 def run_data_operation(operation, wait_seconds=data_session_wait_seconds):

@@ -4,8 +4,8 @@ const DEFAULT_CONFIG_PATH = "/home/node/.openclaw/openclaw.json";
 const DEFAULT_WORKSPACE_DIR = "/home/node/.openclaw/workspace";
 
 export class BootstrapError extends Error {
-  constructor(phase) {
-    super(`OpenClaw bootstrap failed during ${phase}`);
+  constructor(phase, { cause } = {}) {
+    super(`OpenClaw bootstrap failed during ${phase}`, cause ? { cause } : undefined);
     this.name = "BootstrapError";
     this.phase = phase;
     this.code = "OPENCLAW_BOOTSTRAP_FAILED";
@@ -137,7 +137,7 @@ export class OpenClawBootstrapSaga {
         traceId: resolvedTraceId,
       });
       return { sandboxId, instanceId, traceId: resolvedTraceId, status: "prepared" };
-    } catch {
+    } catch (error) {
       if (tokenIssued) {
         try {
           await this.#channel.revokeBootstrapToken(instanceId);
@@ -154,7 +154,7 @@ export class OpenClawBootstrapSaga {
         traceId: resolvedTraceId,
         failedAtPhase: phase,
       });
-      throw new BootstrapError(phase);
+      throw new BootstrapError(phase, { cause: error });
     }
   }
 

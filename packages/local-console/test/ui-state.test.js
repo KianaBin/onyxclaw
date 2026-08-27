@@ -67,7 +67,7 @@ test("personality remains the only forward step before confirmation", () => {
   );
 });
 
-test("resumed users must confirm the SOUL read from persistent storage", () => {
+test("resumed users must confirm the APP-held SOUL before chat", () => {
   assert.deepEqual(
     resolveTabState({
       mode: "resume-confirmation",
