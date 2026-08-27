@@ -8,10 +8,9 @@
   create/connect/pause/commands/files/kill 接口，并在 create 时合并 Provider 固定
   metadata 与实例 trace metadata；
 - `OpenClawBootstrapSaga`：创建后立即签发一次性 Channel token 并把
-  `openclaw.json` 写到最终路径；首次确认时只写 `SOUL.md`；恢复时不读取 SFS 中的
-  `SOUL.md`，而是重新签发 Channel token、重写非持久化 `openclaw.json` 以启动
-  OpenClaw，并展示 APP 内存中暂停前的性格供用户确认；确认后写回 SOUL 并等待 Gateway
-  和 Channel 就绪；
+  `openclaw.json` 写到最终路径；首次确认时只写 `SOUL.md`；恢复时先重新签发 Channel
+  token、重写非持久化 `openclaw.json` 以启动 OpenClaw，再读取 SFS 挂载目录中的
+  `workspace/SOUL.md` 并展示给用户确认；确认后写回 SOUL 并等待 Gateway 和 Channel 就绪；
 - 分阶段错误、Secret 脱敏和失败补偿清理；
 - `config/providers.alicloud.example.json`：ACS VPC 内 Private Protocol 配置示例。
 
@@ -47,9 +46,9 @@ Channel bootstrap token。`create/pause/connect/kill` 均只调用一次对应 S
 bridge 不包装控制面重试；若恢复失败，页面保持 `paused`，允许用户决定是否再次恢复。
 
 恢复后 Agent Gateway 尚未识别 session 时，envd 可能短暂返回
-`Session ID not found` 或 `Session not found`；bridge 会在 45 秒窗口内对这两种错误退避
+`Session ID not found` 或 `Session not found`；bridge 会在 5 秒窗口内对这两种错误退避
 重试。若配置写入仍因数据 session 未就绪而失败，Controller 保持已经恢复的 Sandbox 运行并
-进入 `resume-data-pending`，页面再次点击只重试 `openclaw.json` 准备，不读取 SFS、不重复
+进入 `resume-data-pending`，页面再次点击只重试 `openclaw.json` 准备，成功后读取 SFS，且不重复
 恢复或重新 pause。AgentSphere 有时把控制面 403 只放在
 异常文本中；bridge 会原样脱敏上报该错误，不在本地自动重试。其他恢复 bootstrap 失败
 不会执行首次创建场景的 kill 补偿，Controller 会尽量重新暂停 Sandbox。

@@ -82,7 +82,7 @@ test("maps the adapter client contract to a long-lived Python JSON bridge", asyn
     fake.calls[0].options.env.E2B_SDK_PATCH,
     "kruise-agents-private-protocol",
   );
-  assert.equal(fake.calls[0].options.env.E2B_DATA_SESSION_WAIT_SECONDS, "45");
+  assert.equal(fake.calls[0].options.env.E2B_DATA_SESSION_WAIT_SECONDS, "5");
   assert.doesNotMatch(JSON.stringify(fake.requests), /runtime-secret/);
   assert.deepEqual(fake.requests.map(({ op }) => op), [
     "create",

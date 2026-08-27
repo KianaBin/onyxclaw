@@ -34,7 +34,7 @@ sandbox_url = os.environ.get("E2B_SANDBOX_URL")
 route_domain = os.environ.get("E2B_ROUTE_DOMAIN")
 sessions = {}
 data_session_wait_seconds = max(
-    1.0, float(os.environ.get("E2B_DATA_SESSION_WAIT_SECONDS", "60"))
+    1.0, float(os.environ.get("E2B_DATA_SESSION_WAIT_SECONDS", "5"))
 )
 
 

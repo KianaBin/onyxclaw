@@ -236,9 +236,8 @@ export class CloudConsoleController {
       }
       // AgentSphere restores a paused Sandbox by rebuilding its runtime while
       // preserving the logical Sandbox ID. Recreate the non-persistent config
-      // immediately so the image entrypoint can start the Gateway. Keep using
-      // the personality already held by the APP instead of blocking recovery
-      // on a read from the SFS-backed workspace.
+      // first so the image entrypoint can start the Gateway, then load the
+      // persistent personality from the SFS-backed workspace for confirmation.
       await this.#saga.prepareSandbox({
         sandboxId: this.#status.sandboxId,
         instanceId: this.#status.instanceId,
@@ -246,6 +245,11 @@ export class CloudConsoleController {
         buildConfig: this.#buildConfig,
         cleanupOnFailure: false,
       });
+      const persistentSoul = await this.#saga.readPersistentSoul(
+        this.#status.sandboxId,
+      );
+      this.#soul = persistentSoul.content;
+      this.#soulRestore = persistentSoul.content;
       this.#status = {
         ...this.#status,
         mode: "resume-confirmation",

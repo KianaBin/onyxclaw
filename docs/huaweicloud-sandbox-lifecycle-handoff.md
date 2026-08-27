@@ -57,7 +57,7 @@ IP、VPC/ELB 私网地址、SFS Turbo ID 与共享子路径、AgentSphere Templa
 - pause 后保留 Python 和 Node 两层 session；正常恢复通过原 Node wrapper 只调用一次
   `Sandbox.connect(sandbox_id)`，丢弃返回对象并继续使用 create 时保存的 claimed/routed 和
   traffic/envd token。后续读取 SFS、Commands 和 kill 不再隐式 connect。
-- Agent Gateway 返回 `Session ID not found` 或 `Session not found` 时，bridge 在 45 秒窗口内
+- Agent Gateway 返回 `Session ID not found` 或 `Session not found` 时，bridge 在 5 秒窗口内
   退避重试。最终仍
   失败时不再 pause，也不再次 connect；Sandbox 保持运行，APP 进入
   `resume-data-pending`，页面提供仅重试 `Files.read` 的“重试恢复”按钮。

@@ -93,7 +93,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: app
-          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-sandbox3-v10@sha256:0f998649c05d8b1ed2329427630d82bdeef7fab3306f169ee7af57bd1631f714
+          image: swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.8-resume-sfs-soul-v11@sha256:d72d3b7526c1974b9b4b0b0bcc5398cef877913be8872a4350a9dffd84a8a1f7
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -125,7 +125,7 @@ spec:
                   name: onyxclaw-app-runtime
                   key: channel-signing-secret
             - name: E2B_DATA_SESSION_WAIT_SECONDS
-              value: "45"
+              value: "5"
             - name: ONYXCLAW_OPENCLAW_BASE_CONFIG_JSON
               valueFrom:
                 secretKeyRef:

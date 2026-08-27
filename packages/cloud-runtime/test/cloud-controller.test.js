@@ -113,7 +113,7 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
   assert.equal(status.mode, "connected");
 });
 
-test("resume starts OpenClaw and reuses the APP personality without reading SFS", async () => {
+test("resume starts OpenClaw before loading the persistent SFS personality", async () => {
   const { calls, controller } = fixture();
   await controller.startLobsterMode();
   await controller.confirmSoul("# Persistent lobster");
@@ -127,21 +127,23 @@ test("resume starts OpenClaw and reuses the APP personality without reading SFS"
   assert.equal(resumed.currentStep, "soul");
   assert.equal(resumed.soulConfirmed, false);
   assert.equal(resumed.connectionId, null);
-  assert.equal(controller.getSoul().content, "# Persistent lobster");
-  assert.deepEqual(calls.slice(-3).map(([name]) => name), [
-    "pause",
-    "connect",
-    "prepare",
-  ]);
-  assert.equal(calls.at(-1)[1].cleanupOnFailure, false);
-  assert.equal(calls.at(-1)[1].buildConfig instanceof Function, true);
-
-  await controller.confirmSoul("# Confirmed persistent soul");
-  assert.equal(controller.getStatus().mode, "connected");
+  assert.equal(controller.getSoul().content, "# Soul restored from SFS Turbo");
   assert.deepEqual(calls.slice(-4).map(([name]) => name), [
     "pause",
     "connect",
     "prepare",
+    "read-soul",
+  ]);
+  assert.equal(calls.at(-2)[1].cleanupOnFailure, false);
+  assert.equal(calls.at(-2)[1].buildConfig instanceof Function, true);
+
+  await controller.confirmSoul("# Confirmed persistent soul");
+  assert.equal(controller.getStatus().mode, "connected");
+  assert.deepEqual(calls.slice(-5).map(([name]) => name), [
+    "pause",
+    "connect",
+    "prepare",
+    "read-soul",
     "bootstrap",
   ]);
   assert.equal(calls.at(-1)[1].soul, "# Confirmed persistent soul");
@@ -188,7 +190,7 @@ test("a failed resume remains paused so the user can retry connect", async () =>
   assert.equal(controller.getStatus().connectionId, "connection-2");
 });
 
-test("missing resumed data session retries config preparation without connect, pause, or SFS read", async () => {
+test("missing resumed data session retries preparation, then reads SFS without reconnecting", async () => {
   const calls = [];
   let prepareAttempts = 0;
   const controller = new CloudConsoleController({
@@ -218,7 +220,8 @@ test("missing resumed data session retries config preparation without connect, p
         return { connectionId: "connection-3" };
       },
       async readPersistentSoul() {
-        calls.push(["unexpected-read-soul"]);
+        calls.push(["read-soul"]);
+        return { content: "# Persistent from SFS", size: 21, sha256: "hash" };
       },
     },
     buildConfig: () => ({}),
@@ -239,7 +242,9 @@ test("missing resumed data session retries config preparation without connect, p
     ["connect", "sandbox-1"],
     ["prepare", 2],
     ["prepare", 3],
+    ["read-soul"],
   ]);
+  assert.equal(controller.getSoul().content, "# Persistent from SFS");
 });
 
 test("stop kills the cloud Sandbox and resets the serial flow", async () => {

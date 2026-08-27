@@ -141,7 +141,7 @@ function renderStatus(status) {
     paused: "Sandbox 已暂停",
     resuming: "正在恢复 Sandbox…",
     "resume-data-pending": "数据面尚未就绪，可重试恢复",
-    "resume-confirmation": "OpenClaw 已恢复，等待确认性格",
+    "resume-confirmation": "已读取持久化性格，等待确认",
     error: "连接异常",
   };
   elements.status.className = `status-pill ${status.mode}`;
@@ -507,13 +507,13 @@ elements.pauseSandbox.addEventListener("click", async () => {
 
 elements.resumeSandbox.addEventListener("click", async () => {
   elements.resumeSandbox.disabled = true;
-  elements.chatState.textContent = "正在恢复 Sandbox 并启动 OpenClaw…";
+  elements.chatState.textContent = "正在恢复 Sandbox、启动 OpenClaw 并读取 SOUL.md…";
   try {
     const status = await api("/api/lobster/resume", { method: "POST" });
     initialLanding = false;
     renderStatus(status);
-    notice(elements.soulNotice, "OpenClaw 已开始启动；当前沿用暂停前保存在 APP 中的性格内容，请确认是否写入并进入对话。");
-    elements.chatState.textContent = "OpenClaw 启动中 · 等待确认性格";
+    notice(elements.soulNotice, "OpenClaw 已开始启动，并已读取 SFS Turbo 挂载目录中的 workspace/SOUL.md；请确认是否使用该性格进入对话。");
+    elements.chatState.textContent = "OpenClaw 启动中 · 已读取 SOUL.md，等待确认性格";
   } catch (error) {
     notice(elements.modeNotice, `恢复失败：${error.message}`, true);
     await refreshStatus();

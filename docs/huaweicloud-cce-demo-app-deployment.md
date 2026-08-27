@@ -186,7 +186,7 @@ Files、Commands 和 kill 只调用 `session_for()` 获取刷新后的缓存，�
 后的数据面可能可用，但 pause/connect 后会持续返回 `Session ID not found`。
 
 恢复后第一个 envd 请求仍可能短暂返回 `Session ID not found` 或 `Session not found`。bridge
-会针对这两种等价错误在 45 秒窗口内退避重试。若窗口结束后仍失败，APP 不再调用 pause，
+会针对这两种等价错误在 5 秒窗口内退避重试。若窗口结束后仍失败，APP 不再调用 pause，
 而是保留已经 connect
 成功的运行状态并进入 `resume-data-pending`；页面显示“重试恢复”，再次点击只重试写入
 `openclaw.json` 和启动 OpenClaw，不会重新 connect、pause 或读取 SFS。
