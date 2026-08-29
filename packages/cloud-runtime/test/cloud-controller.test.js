@@ -51,9 +51,6 @@ function fixture() {
     traceIdFactory: () => "trace-1",
     defaultSoul: "# Default lobster",
     buildConfig: ({ instanceId }) => ({ instanceId }),
-    delayImpl: async (milliseconds) => {
-      calls.push(["resume-delay", milliseconds]);
-    },
   });
   return { calls, controller };
 }
@@ -136,23 +133,20 @@ test("resume starts OpenClaw before loading the persistent SFS personality", asy
   assert.equal(resumed.soulConfirmed, false);
   assert.equal(resumed.connectionId, null);
   assert.equal(controller.getSoul().content, "# Soul restored from SFS Turbo");
-  assert.deepEqual(calls.slice(-5).map(([name]) => name), [
+  assert.deepEqual(calls.slice(-4).map(([name]) => name), [
     "pause",
     "connect",
-    "resume-delay",
     "prepare",
     "read-soul",
   ]);
-  assert.deepEqual(calls.at(-3), ["resume-delay", 1_000]);
   assert.equal(calls.at(-2)[1].cleanupOnFailure, false);
   assert.equal(calls.at(-2)[1].buildConfig instanceof Function, true);
 
   await controller.confirmSoul("# Confirmed persistent soul");
   assert.equal(controller.getStatus().mode, "connected");
-  assert.deepEqual(calls.slice(-6).map(([name]) => name), [
+  assert.deepEqual(calls.slice(-5).map(([name]) => name), [
     "pause",
     "connect",
-    "resume-delay",
     "prepare",
     "read-soul",
     "bootstrap",
@@ -185,7 +179,6 @@ test("a failed resume remains paused so the user can retry connect", async () =>
       },
     },
     buildConfig: () => ({}),
-    delayImpl: async () => {},
   });
   await controller.startLobsterMode();
   await controller.confirmSoul("# Retry lobster");
@@ -237,9 +230,6 @@ test("missing resumed data session reconnects before retrying preparation", asyn
       },
     },
     buildConfig: () => ({}),
-    delayImpl: async (milliseconds) => {
-      calls.push(["resume-delay", milliseconds]);
-    },
   });
   await controller.startLobsterMode();
   await controller.confirmSoul("# Persistent");
@@ -248,22 +238,15 @@ test("missing resumed data session reconnects before retrying preparation", asyn
 
   await assert.rejects(controller.resumeLobsterMode(), /PREPARING/);
   assert.equal(controller.getStatus().mode, "resume-data-pending");
-  assert.deepEqual(calls, [
-    ["pause", "sandbox-1"],
-    ["connect", "sandbox-1"],
-    ["resume-delay", 1_000],
-    ["prepare", 2],
-  ]);
+  assert.deepEqual(calls, [["pause", "sandbox-1"], ["connect", "sandbox-1"], ["prepare", 2]]);
 
   const retried = await controller.resumeLobsterMode();
   assert.equal(retried.mode, "resume-confirmation");
   assert.deepEqual(calls, [
     ["pause", "sandbox-1"],
     ["connect", "sandbox-1"],
-    ["resume-delay", 1_000],
     ["prepare", 2],
     ["connect", "sandbox-1"],
-    ["resume-delay", 1_000],
     ["prepare", 3],
     ["read-soul"],
   ]);

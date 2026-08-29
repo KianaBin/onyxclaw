@@ -197,10 +197,12 @@
 
   <section class="summary">
     <strong>结论：</strong>
-    暂停恢复失败的直接原因是 <strong>AgentSphere 控制面已经返回 connect 成功，但 Agent Gateway 数据面尚未恢复该
-    Sandbox 的可用 session</strong>。E03/E04 失败轮与 E05 成功轮使用完全相同的 Sandbox ID、token 指纹、header、
-    domain、Gateway host 和端口；前端刷新也没有重启 Pod 或清空 Python session。因此已基本排除前端或 APP 的
-    token/header 管理，核心位于 Gateway 恢复后的 session 注册、内部路由或服务端 token/session 映射。
+    暂停恢复失败的直接原因是 <strong>AgentSphere 控制面已经返回 connect 成功，但 Agent Gateway 数据面没有该
+    Sandbox 的可用 session</strong>。最新 v17 在两个独立 Sandbox 上复现：控制面 connect 均成功，APP 确认等待
+    1 秒后再发起 Files.write，但失败请求仍持续 45 秒并返回 <code>Session not found</code>。同一 Sandbox、同一
+    token 指纹、header、domain、Gateway host 和端口，在后续 connect 中又可以立即写入成功。因此已基本排除
+    前端或 APP 的 token/header 管理以及固定 1 秒时序问题，核心位于 Gateway 恢复后的 session 注册、内部路由
+    或服务端 token/session 映射。
   </section>
 
   <h2>1. 问题背景</h2>
@@ -261,6 +263,46 @@ Agent Gateway     → Session not found</pre>
     <li><strong>服务端内部原因仍需日志细分：</strong>可能是 Gateway session 注册延迟/竞态、内部 shard 路由不同步，或服务端 token/session 映射未同步。</li>
   </ol>
 
+  <h3>2.3 Debug v17 两个独立 Sandbox 的最新结果（提交 Gateway 的主要证据）</h3>
+
+  <p>测试镜像：<code>0.3.8-session-routing-debug-delay1s-v17</code>，镜像摘要
+  <code>sha256:441848b4578487fa9a2b7e4585cbff4e9926e15a697d7d4b39b5cdc6a94fa620</code>。
+  v17 在每次 <code>Sandbox.connect</code> 成功后明确等待 1 秒，再发起恢复链路的首次
+  <code>Files.write</code>。Pod <code>onyxclaw-app-5476b8f594-qzsn5</code> 全程 Ready、重启次数为 0。</p>
+
+  <table>
+    <thead>
+      <tr><th>Sandbox</th><th>阶段</th><th>generation</th><th>connect</th><th>首次 writeFile</th><th>结果</th></tr>
+    </thead>
+    <tbody>
+      <tr><td rowspan="9"><code>485faf4a…371fa</code><br><span class="muted">envd fp ed6c1f71bc02</span></td><td>创建</td><td>1</td><td>1,019 ms</td><td>28 ms</td><td class="success-text">成功</td></tr>
+      <tr><td>第一次暂停恢复</td><td>2</td><td>742 ms</td><td>45,010 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第一次暂停恢复，手动重试</td><td>3</td><td>484 ms</td><td>15 ms</td><td class="success-text">成功</td></tr>
+      <tr><td>第二次暂停恢复</td><td>4</td><td>2,339 ms</td><td>45,010 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第二次暂停恢复，重试 1</td><td>5</td><td>637 ms</td><td>45,010 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第二次暂停恢复，重试 2</td><td>6</td><td>1,089 ms</td><td>45,009 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第二次暂停恢复，重试 3</td><td>7</td><td>727 ms</td><td>45,010 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第二次暂停恢复，重试 4</td><td>8</td><td>2,091 ms</td><td>45,009 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第二次暂停恢复，重试 5</td><td>9</td><td>168 ms</td><td>45,009 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td rowspan="6"><code>ed9a54be…b07312</code><br><span class="muted">envd fp 5fda0fbdfad7</span></td><td>创建</td><td>1</td><td>922 ms</td><td>23 ms</td><td class="success-text">成功</td></tr>
+      <tr><td>第一次暂停恢复</td><td>2</td><td>831 ms</td><td>45,010 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第一次暂停恢复，手动重试 1</td><td>3</td><td>175 ms</td><td>45,009 ms</td><td class="danger-text">Session not found</td></tr>
+      <tr><td>第一次暂停恢复，手动重试 2</td><td>4</td><td>1,232 ms</td><td>15 ms</td><td class="success-text">成功</td></tr>
+      <tr><td>第二次暂停恢复</td><td>5</td><td>405 ms</td><td>16 ms</td><td class="success-text">成功</td></tr>
+      <tr><td>第三次暂停恢复</td><td>6</td><td>333 ms</td><td>25 ms</td><td class="success-text">成功</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.4 v17 数据直接支持的判断</h3>
+
+  <ul>
+    <li><strong>固定 1 秒延时不足：</strong>每个失败轮都可由“失败完成时间减 45 秒耗时”反推出 writeFile 在 connect 完成约 1.001 秒后发起，说明代码延时确实生效，但 Gateway session 仍不可用。</li>
+    <li><strong>失败不是客户端凭据固定错误：</strong>两个 Sandbox 的 envd token 指纹不同，证明重置后获得了新凭据；每个 Sandbox 内成功轮和失败轮的指纹及 header 完全相同。</li>
+    <li><strong>重新 connect 不保证修复：</strong><code>485faf4a…</code> 第二次暂停后 generation 4～9 连续 6 次 connect 成功，但对应 writeFile 全部失败。</li>
+    <li><strong>同一配置会自行恢复可用：</strong><code>ed9a54be…</code> generation 2、3 失败，generation 4 在未更换 Sandbox ID、token、Gateway 或端口的情况下写入成功，随后 generation 5、6 也连续成功。</li>
+    <li><strong>故障状态属于 Gateway 数据 session 生命周期：</strong>客户端没有可观察到的字段变化可以解释从失败切换为成功，需要服务端关联 session 注册、注销和 shard lookup 日志。</li>
+  </ul>
+
   <h2>3. 代码与版本范围</h2>
 
   <table>
@@ -297,6 +339,11 @@ Agent Gateway     → Session not found</pre>
         <td>debug v16</td>
         <td>记录 session generation、domain、Gateway host、header 名称与 token 安全指纹；不记录凭据明文。</td>
         <td><code>0.3.8-session-routing-debug-v16@sha256:d5cdc18a427751f357c0c4aed8e75823ccfdc4eabe7b55a39125217c3d274f18</code>，用于 E01～E05。</td>
+      </tr>
+      <tr>
+        <td>debug workaround v17</td>
+        <td>保留 v16 全部安全指纹埋点，并在恢复 connect 成功与首次数据面 writeFile 之间增加固定 1 秒等待。</td>
+        <td><code>0.3.8-session-routing-debug-delay1s-v17@sha256:441848b4578487fa9a2b7e4585cbff4e9926e15a697d7d4b39b5cdc6a94fa620</code>；两个独立 Sandbox 仍复现，证明 1 秒窗口不足。</td>
       </tr>
     </tbody>
   </table>
@@ -503,25 +550,60 @@ Sandbox.connect：HTTP 成功
 
   <h2>8. 服务端待核对项</h2>
 
-  <p>客户端取证已经完成。请 AgentSphere / Agent Gateway 服务侧以 Sandbox
-  <code>1fa61e5240c28dfbf1983e54e8a664cfd9e2729441826564f1634668fbc4b472</code> 为主线核对：</p>
+  <p>客户端取证已经完成。请 AgentSphere / Agent Gateway 服务侧优先按下面两个 v17 Sandbox 和北京时间核对。
+  两者访问同一 Gateway host 和 envd port，但各自持有独立 envd token。</p>
+
+  <h3>8.1 Sandbox A：485faf4ae48bbcece4ef3fce3e5bc0a24861e5dd4030be08c93b900368b371fa</h3>
 
   <table>
     <thead>
       <tr><th>北京时间</th><th>客户端事实</th><th>服务端需要核对</th></tr>
     </thead>
     <tbody>
-      <tr><td>17:04:57</td><td>pause 成功</td><td>旧 Gateway session 在哪个节点、何时被注销。</td></tr>
-      <tr><td>17:05:02</td><td>connect 567 ms 成功，generation 2</td><td>新 session 是否注册成功；connect 为何在数据面不可用时返回成功。</td></tr>
-      <tr><td>17:05:02～17:05:47</td><td>Files.write 持续返回 Session not found</td><td>请求命中的 Gateway shard、session lookup key 和未命中原因。</td></tr>
-      <tr><td>17:07:31～17:08:16</td><td>generation 3 再次 connect 成功，写入仍失败</td><td>fresh connect 是否实际触发重注册，还是只返回已有控制面状态。</td></tr>
-      <tr><td>17:09:54</td><td>generation 4 connect 后 23 ms 写入成功</td><td>此时发生了哪一次注册、路由刷新或 token/session 映射更新。</td></tr>
+      <tr><td>19:00:18</td><td>create generation 1 成功；writeFile 28 ms 成功</td><td>确认 create 注册的数据 session、lookup key 和所在 shard。</td></tr>
+      <tr><td>19:03:23</td><td>第一次 pause 成功</td><td>旧 Gateway session 在哪个节点、何时被注销。</td></tr>
+      <tr><td>19:03:25～19:04:11</td><td>connect generation 2 成功；+1 秒发起 writeFile，45.010 秒后 Session not found</td><td>connect 返回成功时新 session 是否完成注册；write 请求命中哪个 shard，lookup 未命中的具体 key/原因。</td></tr>
+      <tr><td>19:04:45～19:04:46</td><td>手动重试 generation 3；同一请求指纹下 writeFile 15 ms 成功</td><td>generation 2 与 3 之间发生了哪次注册、路由刷新或映射更新。</td></tr>
+      <tr><td>19:05:39</td><td>第二次 pause 成功</td><td>成功的 generation 3 session 如何注销，是否存在异步事件乱序。</td></tr>
+      <tr><td>19:05:46～19:12:10</td><td>generation 4～9 共 6 次 connect 均成功；每次 +1 秒发起 writeFile，均在约 45.01 秒后 Session not found</td><td>六次 connect 是否真正触发 session 重注册；为何长时间保持控制面成功、数据面持续 lookup miss。</td></tr>
     </tbody>
   </table>
 
-  <p>客户端对照字段：traffic token 指纹 <code>df04c9be1319</code>、envd token 指纹
-  <code>7f8f08ca5081</code>、envd port <code>49983</code>；E03～E05 三项 header 校验始终为 true。
-  这些值用于关联，不包含凭据明文。</p>
+  <h3>8.2 Sandbox B：ed9a54be61619c6312d7e7ae84f293a2f61503e6bb1931d52ca2fda768b07312</h3>
+
+  <table>
+    <thead>
+      <tr><th>北京时间</th><th>客户端事实</th><th>服务端需要核对</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>19:12:33</td><td>create generation 1 成功；writeFile 23 ms 成功</td><td>确认新 Sandbox 使用独立 envd token 完成数据 session 注册。</td></tr>
+      <tr><td>19:15:13</td><td>第一次 pause 成功</td><td>旧 session 的注销节点、事件时间和传播范围。</td></tr>
+      <tr><td>19:15:17～19:16:03</td><td>connect generation 2 成功；+1 秒发起 writeFile，45.010 秒后 Session not found</td><td>session 注册状态、目标 shard 及 lookup miss 原因。</td></tr>
+      <tr><td>19:16:05～19:16:51</td><td>generation 3 再次 connect 成功；writeFile 再次等待 45.009 秒失败</td><td>fresh connect 是否被去重、是否只返回控制面运行状态。</td></tr>
+      <tr><td>19:18:02～19:18:03</td><td>generation 4 connect 后 writeFile 15 ms 成功</td><td>generation 3 与 4 之间服务端发生的注册完成、映射刷新或 shard 变化。</td></tr>
+      <tr><td>19:20:15～19:20:21</td><td>第二次 pause/resume，generation 5，writeFile 16 ms 成功</td><td>与第一次 pause 的注销/恢复事件链做差异对比。</td></tr>
+      <tr><td>19:21:11～19:21:16</td><td>第三次 pause/resume，generation 6，writeFile 25 ms 成功</td><td>确认成功轮 session 注册完成时间与 connect 返回时间的先后关系。</td></tr>
+    </tbody>
+  </table>
+
+  <h3>8.3 客户端关联字段（均为脱敏指纹）</h3>
+
+  <table>
+    <thead>
+      <tr><th>字段</th><th>Sandbox A</th><th>Sandbox B</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>traffic token SHA-256 前 12 位</td><td><code>df04c9be1319</code></td><td><code>df04c9be1319</code></td><td>环境级 traffic 凭据一致。</td></tr>
+      <tr><td>envd token SHA-256 前 12 位</td><td><code>ed6c1f71bc02</code></td><td><code>5fda0fbdfad7</code></td><td>两个 Sandbox 凭据不同，证明重置没有沿用旧 envd token。</td></tr>
+      <tr><td>envd port</td><td><code>49983</code></td><td><code>49983</code></td><td>所有成功与失败轮一致。</td></tr>
+      <tr><td>固定 Gateway host</td><td colspan="2"><code>agent-gateway-sandbox3-geywmobqmy.agentgateway.cn-south-1.huaweicloud-agentnetwork.com</code></td><td>所有轮次一致。</td></tr>
+      <tr><td>header 自检</td><td colspan="2"><code>sandboxIdHeaderMatches=true</code><br><code>sandboxPortHeaderMatches=true</code><br><code>trafficHeaderMatches=true</code></td><td>成功和失败轮始终一致。</td></tr>
+    </tbody>
+  </table>
+
+  <p>请服务端重点返回：控制面 connect request ID、数据 session registration ID、注销/重注册事件时间、目标
+  Gateway shard、实际 session lookup key、lookup miss 原因，以及成功轮与失败轮是否命中不同内部节点。
+  上述客户端字段只用于日志关联，不包含 token 明文。</p>
 
   <h2>9. 建议处置方向</h2>
 
@@ -540,11 +622,11 @@ Sandbox.connect：HTTP 成功
 
   <div class="summary">
     <p><strong><code>Session not found</code> 是恢复后 Agent Gateway 数据会话不可用的直接表现，不是 openclaw.json 写入内容错误。</strong></p>
-    <p>E03/E04 证明同一新 Sandbox 在暂停前使用同一组 token、header、domain 和 Gateway host 可以写入，恢复后配置完全一致却连续两轮返回 session 不存在；E05 仍使用完全相同配置，在约五分钟后重新 connect 即成功。App 侧 token/header 生命周期已显著降级，核心问题集中在 Gateway 恢复后的 session 注册、路由或服务端 token/session 映射。</p>
+    <p>v17 的两个独立 Sandbox 都在创建阶段正常写入，并在 pause 后出现“connect 成功、等待 1 秒、writeFile 持续 45 秒后 Session not found”。其中 Sandbox A 在第二轮暂停后连续 6 次 connect 成功但全部写入失败；Sandbox B 前两次失败后，在客户端字段完全不变的 generation 4 恢复成功，后续两轮暂停恢复也连续成功。App 侧 Sandbox ID、token/header 生命周期及固定 1 秒时序问题已基本排除，根因集中在 Gateway 恢复后的 session 注册、注销竞态、内部 shard 路由或服务端 token/session 映射。</p>
   </div>
 
   <footer>
-    本报告主要依据 2026-08-27 debug v16 的 E01～E05 APP Pod 脱敏日志，并结合运行镜像内 E2B SDK 源码、管理控制台状态反馈及本地提交差异整理。报告不包含 API Key、traffic token、envd token、模型密钥或登录密码原文。
+    本报告依据 2026-08-27 debug v16 E01～E05 及 debug workaround v17 两个独立 Sandbox 的 APP Pod 脱敏日志，并结合运行镜像内 E2B SDK 源码、管理控制台状态反馈及本地提交差异整理。报告不包含 API Key、traffic token、envd token、模型密钥或登录密码原文。
   </footer>
 </main>
 </body>

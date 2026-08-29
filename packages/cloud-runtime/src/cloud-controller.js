@@ -20,10 +20,6 @@ function isMissingDataSession(error) {
   return false;
 }
 
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 export class CloudConsoleController {
   #adapter;
   #saga;
@@ -41,8 +37,6 @@ export class CloudConsoleController {
   #soulRestore;
   #status;
   #lifecycleRevision = 0;
-  #resumeDataPlaneDelayMs;
-  #delay;
 
   constructor({
     adapter,
@@ -56,13 +50,7 @@ export class CloudConsoleController {
     timeoutMs = 120_000,
     eventIdFactory = randomUUID,
     chatId = `cloud-${randomUUID()}`,
-    resumeDataPlaneDelayMs = 1_000,
-    delayImpl = delay,
   }) {
-    if (!Number.isFinite(resumeDataPlaneDelayMs) || resumeDataPlaneDelayMs < 0) {
-      throw new TypeError("resumeDataPlaneDelayMs 必须是非负有限数值");
-    }
-    if (typeof delayImpl !== "function") throw new TypeError("delayImpl 必须是函数");
     this.#adapter = adapter;
     this.#saga = saga;
     this.#instanceIdFactory = instanceIdFactory;
@@ -74,8 +62,6 @@ export class CloudConsoleController {
     this.#timeoutMs = timeoutMs;
     this.#eventIdFactory = eventIdFactory;
     this.#chatId = chatId;
-    this.#resumeDataPlaneDelayMs = resumeDataPlaneDelayMs;
-    this.#delay = delayImpl;
     this.#soul = defaultSoul;
     this.#soulRestore = defaultSoul;
     this.#status = {
@@ -282,13 +268,6 @@ export class CloudConsoleController {
       // again to obtain a fresh routed session before retrying Files.write.
       await this.#adapter.connectSandbox(sandboxId);
       connectedForResume = true;
-      if (lifecycleRevision !== this.#lifecycleRevision) {
-        throw new Error("本次操作已被重置新用户取消");
-      }
-      // AgentSphere may return control-plane connect success before Agent
-      // Gateway has published the resumed data session. Keep a small window
-      // before the first envd write while the service-side race is addressed.
-      await this.#delay(this.#resumeDataPlaneDelayMs);
       if (lifecycleRevision !== this.#lifecycleRevision) {
         throw new Error("本次操作已被重置新用户取消");
       }
