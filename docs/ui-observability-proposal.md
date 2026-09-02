@@ -77,7 +77,7 @@ MiniMax。连接线按当前请求高亮：
 - `Files.write/read`：对象为 File，展示沙箱内路径和 written/read/failed；
 - `Commands.run`：对象为 Process/Command，展示 Sandbox ID 和 exit code。
 
-`running` 调用的耗时随轮询增长，结束后冻结。计时点位于 Alibaba ACS Adapter 调用
+`running` 调用的耗时随轮询增长，结束后冻结。计时点位于 AgentSphere Adapter 调用
 E2B SDK 的边界，因此包含 APP 到 Sandbox Service 的请求等待时间，但不包含之后的
 OpenClaw、Channel 或 MiniMax 推理时间。SDK 未公开 HTTP 状态码时不伪造状态码，只展示
 succeeded/failed 及可获得的对象状态。
@@ -99,7 +99,7 @@ GET /api/observability
     {
       "id": "...",
       "api": "Sandbox.create",
-      "target": "Alibaba ACS Sandbox Manager",
+      "target": "AgentSphere Sandbox Service",
       "state": "succeeded",
       "durationMs": 286,
       "object": {
@@ -135,7 +135,7 @@ GET /api/observability
 2. 在现有 BFF 增加 `/api/observability`，覆盖运行中、成功和失败调用；
 3. 重构 HTML/CSS 为手机 + 双层工作台；
 4. 前端轮询观测接口，驱动架构连线、对象状态和调用列表；
-5. 跑全量测试，并分别验证本机模式和 ACS 云端模式。
+5. 跑全量测试，并分别验证本机模式和 Huawei CCE + AgentSphere 云端模式。
 
 完成标准：原三步流程无回归；Sandbox Service 长耗时调用进行中可见；完成后显示 Adapter
 边界的真实耗时和后端对象；OpenClaw/模型耗时不进入列表；失败状态可见；任何观测响应中

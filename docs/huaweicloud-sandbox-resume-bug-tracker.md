@@ -8,7 +8,7 @@
 >
 > 首次建档：`2026-08-24`
 >
-> 关联交接：[`huaweicloud-sandbox-lifecycle-handoff.md`](./huaweicloud-sandbox-lifecycle-handoff.md)
+> 关联构建说明：[`huaweicloud-image-build-and-update.md`](./huaweicloud-image-build-and-update.md)
 
 ## 结论与修复验证
 
@@ -77,9 +77,9 @@
 | 持久化文件 | `/home/node/.openclaw/workspace/SOUL.md` |
 | 部署运行态依据 | CCE 集群中实际 Deployment、ReplicaSet、Pod 和镜像 digest |
 
-仓库中的 `deploy/huaweicloud-cce/onyxclaw-app-demo.yaml` 是部署参考和历史快照，不作为当前
-运行态的 source of truth。目前遗留问题排查、镜像版本判断和验收均以 CCE 中实际对象为准。
-仓库清单与 CCE 不一致时，在本文记录差异，但不能据此覆盖或反推线上状态。
+仓库不再保存 CCE 部署 YAML。运行态的 source of truth 由实际 CCE 对象决定；实际部署操作
+由 `onyxclaw-one-click` 维护。遗留问题排查、镜像版本判断和验收均以 CCE 中实际对象为准，
+但仓库记录不得据此覆盖或反推线上状态。
 
 ## 已知错误时间线
 
@@ -536,6 +536,7 @@ workspace 已落 SFS
 | 2026-09-02 09:12 | CCE APP 运行基线核验 | `onyxclaw-demo/onyxclaw-app` Pod Ready | Deployment tag 为 `0.3.8-session-routing-debug-nodelay-wait5s-v19`，运行 imageID 与 v19 digest 一致 | `sha256:fe0c5274fff79897fce53634756694edc9799f393e3e3dde416d604749788293`；远端 `kubectl` 只读查询 | 后续 APP 补丁必须 `FROM` 此不可变 digest；节点 Docker 缓存中的 v12-4 不是 APP 发布基线 |
 | 2026-09-02 09:18 | Channel 模板运行基线核验 | 用户确认当前 Template 镜像；远端 Docker 只读核验 | 当前基线为 `onyxclaw-openclaw:0.3.8-channel-error-fix`，目标 `inbound.js` 与本地修复前版本哈希相同 | digest `sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5`；`inbound.js` SHA-256 `19df8e39…c11da` | Channel 补丁必须改为 `FROM` 此不可变 digest；此前基于 v12-4 的未推送本地候选不得发布 |
 | 2026-09-02 09:20 | 双镜像候选构建与容器内核验 | 远端独立目录 `/home/hzp/onyxclaw-chat-delivery-v21` | APP 仅覆盖 Controller、Simulator、UI；Channel 仅覆盖 `inbound.js`；四个镜像内文件哈希均与本地受测源码一致，四个 JS 均通过 `node --check` | APP local ID `41bd35d2dbc1`；Channel local ID `4a40f5f68bd9`；不记录密钥 | 两份候选均未推送到 SWR、未 rollout、未创建/替换 Template；等待 registry 登录后才可发布 |
+| 2026-09-02 | 部署范围收敛决策 | 项目维护边界 | 仅支持 Huawei CCE + AgentSphere；镜像仅在 `demo-cn-south1` 开发机构建，默认不 push、不 rollout | 中文 `CONTEXT.md` 与 ADR 0002 | 已删除旧的第二云厂商实现、配置、文档和发布路径；保留通用 runtime 与本地验证 | 完成 |
 
 ## 变更记录
 
@@ -568,3 +569,4 @@ workspace 已落 SFS
 | 2026-09-02 | 代码修复与镜像构建 | 新增 `waitForReplyTo(inboundEventId)`，聊天按 outbound `payload.inReplyTo` 精确匹配；新增开关控制的 `[DEBUG-chat-v1]` 脱敏 event trace 与并发回归。v20 基于 v19 不可变 digest 构建，仅覆盖两个运行文件 | `cloud-controller.js`、`ws-simulator.js` 及对应测试；远端独立构建目录 | `yqb-dev` `2c09364`；本地 Docker image `0c13e0f34c59` | 定向 18/18；全量 `npm test` 119/119；镜像 build 成功 | SWR push 被拒绝 `denied: you do not have the permission`；未 rollout，需具备目标仓库推送权限后继续 |
 | 2026-09-02 | 代码修复与构建契约 | Channel 改走 `dispatchReply`；APP 在发送入站前登记复合关联等待者，断连/重置清理等待者；UI 在 hello 期间禁止发送。新增基于 CCE v19 与已核验 `channel-error-fix` digest 的最小增量 Dockerfile | `inbound.js`、`cloud-controller.js`、`ws-simulator.js`、`app.js`、对应测试及两个 CCE Dockerfile | `yqb-dev` / 未提交 | 定向 26/26、全量 `npm test` 121/121；APP 候选已构建，正确 Channel 基线候选待重建 | 不替换 Template，仍由各 Release Account 手工创建；此前 v12-4 Channel 候选未推送、不得发布 |
 | 2026-09-02 | 候选镜像构建 | v19 APP 和 `channel-error-fix` Channel 的最小增量层已在远端构建；容器内语法、目标文件 SHA-256 和构建契约均通过 | 远端独立构建目录；两个 v21 Dockerfile | APP `41bd35d2dbc1`；Channel `4a40f5f68bd9` | 定向 26/26、`npm test` 121/121、构建契约 6/6、容器内 4 文件哈希匹配 | 待用户完成目标 SWR registry 登录后 push；之后回拉 digest、创建新 Template、用新 Sandbox 做 P0 验收 |
+| 2026-09-02 | 稳定基线回收与构建验证 | 从远程开发机回收 v19 的真实 Dockerfile 与唯一覆盖的 Controller；新增干净 AgentSphere OpenClaw 基础镜像及完整 Channel 构建定义 | `deploy/huaweicloud-cce/app-v19/`、`deploy/huaweicloud-agentsphere-openclaw/`、构建契约测试 | 仅远端本地验证标签 | v19 重建镜像与既有 v19 镜像 ID 一致；完整 Channel 构建、插件软链接、模块加载与 JS 语法均通过 | 未登录镜像仓库、未 push、未 rollout、未变更 Template |

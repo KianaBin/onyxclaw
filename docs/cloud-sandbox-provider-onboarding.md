@@ -1,11 +1,8 @@
-# 云厂商 Sandbox Provider 对接操作指南
+# Huawei CCE + AgentSphere Sandbox 对接操作指南
 
-本文面向需要把 OnyxClaw 接入云计算厂商 Sandbox 服务的研发、云架构和交付团队。
-目标是把厂商差异收敛在 Provider Profile、SDK Client 和小型 Adapter 内，使上层 APP、
-OpenClaw 启动编排、Channel 和可观测逻辑不感知具体云厂商。
-
-阿里云 ACS Agent Sandbox 是本文的参考实现。文中的 ACS 版本和能力结论来自本项目
-2026 年 7 月完成的真实环境验证；后续对接时仍需以目标账号、地域和厂商当期文档为准。
+本文面向维护 Huawei CCE 上的 OnyxClaw APP 与 AgentSphere Sandbox 的研发、云架构和
+交付团队。目标是把环境差异收敛在 Provider Profile、SDK Client 和小型 Adapter 内，
+使上层 APP、OpenClaw 启动编排、Channel 和可观测逻辑保持稳定。
 
 ## 1. 对接目标与分层
 
@@ -135,9 +132,8 @@ file-read、file-write、kill，同时保留机器可读错误码。对用户展
 
 ## 4. Provider Profile
 
-Profile 只包含可提交、可评审的非敏感信息。通用模板位于
-[`config/providers.example.json`](../config/providers.example.json)，ACS 示例位于
-[`config/providers.alicloud.example.json`](../config/providers.alicloud.example.json)。
+Profile 只包含可提交、可评审的非敏感信息。Huawei 示例位于
+[`config/providers.huaweicloud-agentsphere.example.json`](../config/providers.huaweicloud-agentsphere.example.json)。
 
 需要收集的字段：
 
@@ -285,45 +281,32 @@ API 延迟、失败率、创建成功率、就绪耗时、孤儿 Sandbox 数和�
 | 安全 | Secret 扫描、日志和 UI 检查 | 密钥、token、文件内容无泄漏 |
 | 清理 | kill、预热池删除、IaC destroy | 无 Sandbox、负载均衡、NAT、VPC 等遗留 |
 
-## 6. 阿里云 ACS 示例
+## 6. Huawei CCE + AgentSphere 参考实现
 
 ### 6.1 参考架构
 
-本项目使用：
+本项目使用 CCE 承载 APP，AgentSphere 通过 E2B-compatible API 提供 Sandbox。每个
+发布账号自行维护 Template、Secret、私网 endpoint、路由和安全组；仓库不保存这些环境的
+真实标识或凭据。
 
-- ACS profile 集群；
-- `ack-agent-sandbox-controller` 和 `ack-sandbox-manager`；
-- `SandboxSet/onyxclaw` 预热池；
-- APP/BFF 与 Sandbox Manager 位于同一 VPC/集群；
-- OpenClaw 派生镜像镜像到杭州 ACR，并使用 digest 固定；
-- Private Protocol 完成第一轮验证。
+### 6.2 关键能力与验收
 
-详细 IaC 和组件要求见
-[`docs/alibaba-acs-design.md`](./alibaba-acs-design.md) 与
-[`iac/alicloud-acs/README.md`](../iac/alicloud-acs/README.md)。
+| 能力 | 项目要求 |
+| --- | --- |
+| create/connect/kill | 以 Provider Profile 声明的 Template 进行真实验证 |
+| commands.run、files.read/write | 使用 Template 的 `node` 用户验证 |
+| pause/resume | 仅在 Profile 声明支持时进行恢复验收 |
+| Channel 与 Gateway | 必须从 AgentSphere Sandbox 的网络视角验证 |
+| 镜像与 Template | 使用不可变 digest，Template 由发布账号手工创建 |
 
-### 6.2 ACS 能力映射
-
-| 能力 | ACS 当前结论 | 本项目状态 |
-| --- | --- | --- |
-| create/connect/kill | 支持 | Adapter 和真实云验证通过 |
-| get_info/list/set_timeout | 支持 | 厂商能力存在，上层尚未全部使用 |
-| pause/resume | 支持 beta pause/connect | Profile 声明支持，需继续做跨重启恢复验收 |
-| commands.run | 支持 | 指定 `user="node"` 验证通过 |
-| files.read/write | 支持 | UTF-8 和 bootstrap 文件验证通过 |
-| Port routing | Native/Private 两种协议 | 首轮使用 Private Protocol |
-| run_code | 自定义镜像场景不作为可用能力 | 当前不使用 |
-| logs/metrics/network/events/volumes | 当前兼容面不提供 | 不纳入 P0，capability 应声明为不支持 |
-| 预签名上传下载 | 当前不支持 | 大文件场景需替代方案 |
-
-### 6.3 ACS Profile 要点
+### 6.3 AgentSphere Profile 要点
 
 ```json
 {
-  "id": "alicloud-acs",
-  "apiBaseUrl": "http://sandbox-manager.sandbox-system.svc.cluster.local:7788",
-  "compatibilityVersion": "e2b-python-2.24-private-protocol",
-  "templateId": "onyxclaw",
+  "id": "huaweicloud-agentsphere",
+  "apiBaseUrl": "https://agentsphere.example.internal",
+  "compatibilityVersion": "agentsphere-e2b-poc",
+  "templateId": "replace-with-agentsphere-template-id",
   "defaultUser": "node",
   "homeDir": "/home/node",
   "workspaceDir": "/home/node/.openclaw/workspace",
@@ -334,66 +317,53 @@ API 延迟、失败率、创建成功率、就绪耗时、孤儿 Sandbox 数和�
 
 真实配置使用仓库中的完整 Profile，以上片段仅用于说明关键映射。
 
-### 6.4 Private Protocol 特殊处理
+### 6.4 标准 E2B-compatible 连接
 
-ACS Private Protocol 使用 `/kruise/api` 和 `/kruise/<sandbox>/<port>` 路由。Python Client
-必须在导入 `e2b.Sandbox` 之前执行 `kruise-agents` patch。本项目固定兼容组合为
-`e2b==2.24.0`、`e2b-code-interpreter==2.7.0` 和对应 patch。
+Profile 必须使用 `sdkPatch: "none"`。控制面 `api.baseUrl` 和可选数据面
+`api.sandboxUrl` 由 Profile 提供；本地调试地址不能写回 CCE 的运行时 Profile。
 
-云内 APP 使用 Manager Service 的 VPC 地址；macOS 通过 `kubectl port-forward` 调试时，
-Manager 返回的数据面地址仍是 VPC 地址，因此测试 Client 需要只在本地调试层改写 route
-domain。不要把本机地址写回云端 Profile。
+### 6.5 镜像注意事项
 
-### 6.5 ACS 镜像注意事项
-
-- 自定义镜像至少包含 `cp`、`mv`、`mkdir` 和 `/bin/bash`；
-- envd 需要足够权限创建命令进程，本项目让 envd 以 root 工作；
-- OpenClaw Gateway 最终降权为 node 用户；
+- OpenClaw Gateway 以 Template 约定的用户运行；
 - bootstrap 配置通过运行时文件写入，不烘焙到镜像；
-- 同地域 ACR 可避免跨境拉取 GHCR 的长延迟；
-- 私有 ACR、跨账号和跨地域场景需要单独验证镜像拉取身份。
+- 镜像只在 `demo-cn-south1` 基于已核验 digest 构建；
+- push、CCE rollout 和 Template 替换必须分别得到明确授权。
 
-### 6.6 ACS 密钥边界
+### 6.6 密钥边界
 
-安装 Sandbox Manager 时使用的 `adminApiKey` 会被组件转换。E2B SDK 实际运行时 Key
-来自 Manager 管理的 Team/Key 体系；不能假设初始化 admin key 就是 SDK Key。
+AgentSphere API Key、模型 API Key 和 Channel signing secret 仅通过 CCE Secret 注入。它们
+不得进入 Profile、镜像层、浏览器响应、日志或测试报告。
 
-本机集群管理员 smoke 可以从 `sandbox-system/e2b-key-store` 读取运行时 Key，但生产 APP
-应通过受控 Secret 管理流程获得 Team Key，不能依赖直接读取 Kubernetes 内部 Secret。
-
-### 6.7 ACS 冒烟测试
+### 6.7 冒烟测试
 
 基础 smoke 顺序：
 
 ```text
-port-forward Manager
-  → Sandbox.create(template="onyxclaw")
+准备受控测试 Profile
+  → Sandbox.create(template="<template-id>")
   → commands.run("id ...", user="node")
   → files.write("/tmp/...", ...)
   → files.read("/tmp/...", user="node")
   → finally Sandbox.kill()
 ```
 
-仓库脚本：
+镜像构建边界见
+[`docs/huaweicloud-image-build-and-update.md`](./huaweicloud-image-build-and-update.md)；CCE、
+AgentSphere 和 Template 的实际部署操作由
+[onyxclaw-one-click](https://github.com/KianaBin/onyxclaw-one-click) 维护。
 
-```bash
-/tmp/onyx-acs-e2e-venv/bin/python iac/alicloud-acs/scripts/e2b-smoke.py
-```
-
-### 6.8 ACS 常见问题
+### 6.8 常见问题
 
 | 现象 | 常见原因 | 检查与处理 |
 | --- | --- | --- |
-| SDK 401/403 | 混用了 admin key 和 runtime/team key | 检查 Manager Key 来源与 Secret 注入 |
-| SDK 路由 404 | Private Protocol patch 顺序错误 | patch 必须早于导入 E2B Sandbox |
-| port-forward 控制面通、数据面不通 | SDK 使用了 Manager 返回的 VPC 域名 | 仅在本地 Client 改写 route domain |
-| Sandbox 长时间 Pending | 余额、配额、vSwitch IP 或组件异常 | 查看 Sandbox/Pod events 和账号状态 |
-| 失败 Sandbox 不再重试 | 旧失败对象仍存在 | 删除失败对象，让 SandboxSet 补建 |
-| 镜像拉取慢或超时 | 跨境 Registry、私有鉴权或错误 digest | 镜像到同地域 ACR并验证顶层 digest |
+| SDK 401/403 | Secret 注入、账号权限或 Template 权限错误 | 检查 Secret 引用和 AgentSphere 授权 |
+| 数据面不通 | Endpoint、私有 DNS、路由或安全组错误 | 从 CCE Pod 与测试 Sandbox 两侧分别验证 |
+| Sandbox 长时间 Pending | 配额、Template 或服务端状态异常 | 查询 AgentSphere 状态并保留脱敏 request ID |
+| 镜像拉取慢或超时 | Registry 鉴权或错误 digest | 在 `demo-cn-south1` 核验 digest 后再创建 Template |
 | 容器没有 command | 部署了 attestation 子 manifest | 使用 image index/平台镜像 digest |
 | command 权限错误 | envd 用户、运行用户或文件权限不匹配 | 分别确认 envd 权限和 `user="node"` |
 | Gateway 未 ready | 配置未写完、模型/Channel 网络不通 | 查看 Bootstrap 阶段和脱敏命令详情 |
-| cgroup 警告 | ACS 环境未提供完整 cgroup v2 | 确认厂商降级行为，再验证命令/文件能力 |
+| cgroup 警告 | Template 运行时限制 | 确认 AgentSphere Template 行为，再验证命令/文件能力 |
 
 ## 7. 交付物清单
 
@@ -403,10 +373,10 @@ port-forward Manager
 - 可提交的 Profile 示例和 Secret 名称清单；
 - SDK 版本锁和 Adapter；
 - 自定义镜像 Dockerfile、不可变 digest 和离线 archive；
-- IaC、网络拓扑、账号前置授权和 destroy 流程；
+- APP v19、干净 OpenClaw 基础镜像和完整 Channel 的 Dockerfile；
 - contract tests、真实 smoke 和 Full E2E 报告；
 - 错误码、观测字段、告警与脱敏说明；
-- 配额、成本、地域和清理 Runbook；
+- 构建验证、错误码、观测字段与脱敏说明；
 - 已知限制、厂商联系人和升级兼容策略。
 
 ## 8. 代码导航
@@ -418,9 +388,10 @@ port-forward Manager
 | Node/Python SDK Bridge | `packages/cloud-runtime/src/python-e2b-client.js`、`e2b-bridge.py` |
 | Bootstrap Saga | `packages/cloud-runtime/src/openclaw-bootstrap.js` |
 | Sandbox Service 观测 | `packages/local-console/src/observability.js` |
-| ACS Profile | `config/providers.alicloud.example.json` |
-| ACS IaC | `iac/alicloud-acs` |
-| ACS E2B smoke | `iac/alicloud-acs/scripts/e2b-smoke.py` |
+| Huawei Profile | `config/providers.huaweicloud-agentsphere.example.json` |
+| Huawei 镜像构建与更新 | `docs/huaweicloud-image-build-and-update.md` |
+| 实际部署操作 | `https://github.com/KianaBin/onyxclaw-one-click` |
+| 聊天发布与验证证据 | `docs/huaweicloud-sandbox-resume-bug-tracker.md` |
 
 对接新的 E2B 兼容厂商时，先从 Profile 和 SDK contract tests 开始；只有证明确有协议或
 生命周期差异后，再引入专用 Adapter，避免厂商分支扩散到 APP 和业务编排层。

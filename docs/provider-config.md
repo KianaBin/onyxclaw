@@ -1,7 +1,9 @@
 # 云 Provider 配置管理
 
-完整的接口分级、接入步骤、验收矩阵和阿里云 ACS 示例见
-[云厂商 Sandbox Provider 对接操作指南](./cloud-sandbox-provider-onboarding.md)。
+Huawei CCE + AgentSphere 的非敏感配置字段和环境变量名称使用本文及
+[Huawei AgentSphere 示例](../config/providers.huaweicloud-agentsphere.example.json)。镜像构建与更新见
+[Huawei 镜像构建方案](./huaweicloud-image-build-and-update.md)；实际部署操作由
+[onyxclaw-one-click](https://github.com/KianaBin/onyxclaw-one-click) 维护。
 
 ## 目标
 
@@ -38,7 +40,7 @@ SSRF 和配置注入。
 ### 1. 可提交的 Provider Profile
 
 存放非敏感、可评审的配置：API URL、Template ID、路径、timeout、能力声明和密钥
-环境变量名。参考 [providers.example.json](../config/providers.example.json)。
+环境变量名。参考 [Huawei AgentSphere 示例](../config/providers.huaweicloud-agentsphere.example.json)。
 
 实际部署可以挂载 `config/providers.local.json`，该文件默认被 Git 忽略。
 
@@ -51,7 +53,7 @@ SSRF 和配置注入。
 - Channel signing secret；
 - 其他厂商私有凭据。
 
-Profile 只保存类似 `VENDOR_A_E2B_API_KEY` 的环境变量名，真实值由环境变量或云
+Profile 只保存类似 `HUAWEICLOUD_AGENTSPHERE_E2B_API_KEY` 的环境变量名，真实值由环境变量或云
 Secret Manager 注入。参考 [.env.example](../.env.example)。
 
 ### 3. 运行时状态
@@ -80,8 +82,8 @@ Secret Manager 注入。参考 [.env.example](../.env.example)。
 启动参数：
 
 ```text
-ONYXCLAW_PROVIDER_CONFIG=config/providers.local.json
-ONYXCLAW_PROVIDER=vendor-a
+ONYXCLAW_PROVIDER_CONFIG=config/providers.huaweicloud-agentsphere.example.json
+ONYXCLAW_PROVIDER=huaweicloud-agentsphere
 ```
 
 ## 校验规则
@@ -94,22 +96,16 @@ ONYXCLAW_PROVIDER=vendor-a
 - HTTP/WS 只允许 loopback mock；
 - workspace 和 HOME 必须是绝对路径；
 - timeout、Gateway port 必须是正整数；
-- `api.sdkPatch` 只能是标准协议的 `none` 或 ACS Private Protocol 所需的
-  `kruise-agents-private-protocol`；
+- `api.sdkPatch` 只能是标准协议的 `none`；
 - provider ID 只能包含小写字母、数字和连字符；
 - 所有被引用的 Secret 环境变量一次性检查并完整报告；
 - 对浏览器只暴露 ID、展示名称、协议和 capability flags。
 
 ## 新增一个兼容 Provider
 
-1. 复制 `providers.example.json` 中的 Profile；
-2. 使用新的稳定 provider ID 和独立的 Secret 环境变量名；
-3. 填写控制面 `api.baseUrl`、可选数据面 `api.sandboxUrl`、Template、路径、网络和能力声明；
-   标准 E2B 兼容服务保持 `api.sdkPatch: "none"`，不要加载其他厂商的 SDK patch；
+1. 从 Huawei AgentSphere 示例复制 Profile；
+2. 使用当前发布账号的 Template、私网 endpoint 和独立的 Secret 环境变量名；
+3. 保持 `api.sdkPatch: "none"`，填写 CCE 与 AgentSphere 的网络和能力声明；
 4. 运行 Registry 单元测试和配置校验；
-5. 运行 E2B contract tests；
-6. 运行 `create → command → file → pause → connect → file → kill`；
-7. 最后运行 OpenClaw Channel Full E2E。
-
-如果第 5 步证明厂商与 E2B 语义不同，先记录差异，再决定增加小型 Adapter；不要在
-Profile 中加入任意代码或 shell 命令绕过差异。
+5. 在新 Sandbox 上运行 `create → command → file → bootstrap → chat → kill`；
+6. 发布负责人明确授权后，按 `onyxclaw-one-click` 的部署流程验证 Channel、模型网络和可选 pause/resume。

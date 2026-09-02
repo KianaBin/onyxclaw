@@ -1,6 +1,7 @@
 # OnyxClaw：E2B 兼容 Sandbox 端到端验证方案
 
-> 状态：本机 macOS 与阿里云 ACS 云端主链路均已跑通；connect/pause/resume 和差异测试待实施
+> 状态：本机 macOS 与 Huawei CCE + AgentSphere 云端主链路已具备受控验证路径；
+> 生命周期与聊天交付证据以当前 bug tracker 为准。
 > 日期：2026-07-19
 > 输入需求：[init.md](./init.md)
 > 本版调整：补充本机/云端双轨范围、本机验收矩阵和 Phase 1 串行流程
@@ -527,46 +528,15 @@ Phase 0 runner 同时写入 JSON artifact。
 本机轨道没有实现且不应被误判为缺口的能力：Sandbox create/connect/pause/resume/kill、
 E2B Files/Commands API、云端 WSS/TLS、Docker 部署、差异测试、webhook、语音和媒体。
 
-### 10.4 阿里云 ACS 云端验收进度
+### 10.4 Huawei CCE + AgentSphere 云端验收
 
-2026-07-19 已通过 IaC 创建真实 ACS 集群和预热池，使用固定 digest 的 OnyxClaw
-v0.1.2 Sandbox 镜像完成基础验证。2026-07-20 将云端 APP 更新为 `app-v0.2.0`，其
-GHCR 与杭州 ACR 均校验为固定 digest
-`sha256:47876460c633152839de567d84add25b58536a7ae09a91d475b6b1ce06d65839`，并完成
-以下验证：
+云端 APP 运行在 CCE，Sandbox 由 AgentSphere Template 提供。发布验证从一个新 Sandbox
+开始，至少覆盖 create、Files/Commands、OpenClaw bootstrap、Channel 注册、hello、两轮聊天
+和 kill；如启用 pause/resume，还必须单独验证恢复后的数据面、Gateway 与 Channel。
 
-| 云端验收项 | 结果 | 说明 |
-| --- | --- | --- |
-| ACS 基础设施与 Sandbox 组件 | 通过 | VPC、双 vSwitch、ACS、controller、manager 均已创建 |
-| Release 镜像与同地域分发 | 通过 | GitHub Release 构建后复制到杭州 ACR，按 digest 部署 |
-| `Sandbox.create` / `kill` | 通过 | 真实 E2B SDK 领取预热实例并在 finally 中释放 |
-| `commands.run` | 通过 | envd 以 root 运行，命令显式使用 OpenClaw 的 node 用户 |
-| `files.write/read` | 通过 | node 用户写读临时文件内容一致 |
-| Secret 边界 | 通过 | smoke 从 `e2b-key-store` 读取转换后的运行时 Key，不输出明文 |
-| APP 容器与 ClusterIP Service | 通过 | APP 从杭州 ACR 按 digest 拉取，在同一 ACS 集群内运行 |
-| 云端 UI 运行模式 | 通过 | BFF 只下发 cloud、Provider ID 和展示名；浏览器不接收 Endpoint 或 Secret |
-| 云端新/老用户入口 | 部分通过 | 新用户真实 E2E 通过；已有 Sandbox 的输入、connect 和 Channel 就绪等待已有自动化测试，pause/resume 实测待补 |
-| Sandbox Service 可观测面板 | 通过 | 仅展示 create/connect/kill、Files、Commands 调用、对象状态与耗时，不记录模型耗时 |
-| Provider/Secret 配置 | 通过 | E2B、MiniMax 和 Channel 凭据由 Kubernetes Secret 注入，不进入镜像和 Git |
-| 新用户串行流程 | 通过 | 领取暖池 Sandbox → 确认 Soul → 进入聊天，服务端门禁生效 |
-| OpenClaw bootstrap | 通过 | E2B Files 写入配置/Soul，Gateway 与 Channel 约 8 秒就绪 |
-| MiniMax 首次问候 | 通过 | `minimax/MiniMax-M3` 经自定义 Channel 回复，实测约 13.7 秒 |
-| MiniMax 普通文字对话 | 通过 | 回复符合 Soul 性格，实测约 2.4 秒 |
-| Sandbox 清理 | 通过 | APP stop 调用 E2B kill，控制台回到 `idle/mode` |
-| connect/pause/resume | 待实施 | 纳入完整云端生命周期 E2E |
-
-`app-v0.2.0` 的一次真实新用户验收中，`Sandbox.create` 为 19,184 ms，两个
-`Files.write` 分别为 14 ms 和 2 ms，Gateway readiness 使用多次 `Commands.run`
-轮询后成功，首次 MiniMax 性格问候为 5,782 ms，最终 `Sandbox.kill` 为 17 ms。
-readiness 期间非零退出的 Commands 调用会如实显示为失败尝试，但最终成功探测决定
-Gateway 就绪；模型问候耗时只用于对话体验，不进入 Sandbox Service API 面板。
-
-可重复 smoke 位于 `iac/alicloud-acs/scripts/e2b-smoke.py`。本轮发现并修复了
-`/run/e2b` 权限和 envd 非 root 导致的进程创建失败；账户余额不足产生的失败 Sandbox
-不会自动重试，需要删除失败资源，由 SandboxSet 控制器重新创建。APP 实测还发现
-Manager 返回的 `agents-vpc.infra` 地址不能在 APP Pod 内解析，因此部署清单必须设置
-`E2B_ROUTE_DOMAIN=sandbox-gateway.sandbox-system.svc.cluster.local:7788`，将 Files 和
-Commands 请求路由到集群内 Sandbox Gateway。该配置属于 provider 网络参数，不是密钥。
+镜像在 `demo-cn-south1` 上从已核验的不可变基线构建，并在容器内核验语法和覆盖文件哈希。
+构建不自动 push、rollout 或创建 Template。实际 image digest、测试结果和运行时证据统一记录在
+[`huaweicloud-sandbox-resume-bug-tracker.md`](./huaweicloud-sandbox-resume-bug-tracker.md)。
 
 ## 11. 分阶段交付
 
@@ -583,9 +553,8 @@ Commands 请求路由到集群内 Sandbox Gateway。该配置属于 provider 网
 本机先导验证已于 2026-07-19 完成：最小 Channel Plugin、WebSocket Simulator、
 session 自动重连、`SOUL.md` 写入/恢复、Gateway restart/probe、token 轮换和两轮
 消息均已在 macOS OpenClaw 2026.5.28 上自动跑通。该结果验证了应用层测试夹具，
-不等同于全部云端生命周期验收完成。2026-07-19 已在阿里云 ACS 用真实 E2B SDK
-跑通 create、commands、files、OpenClaw bootstrap、自定义 Channel、MiniMax 对话和
-kill；pause/connect/resume 仍需后续补充。
+不等同于全部云端生命周期验收完成。Huawei CCE + AgentSphere 的实际验证以当前 tracker
+中的受控实验为准；pause/connect/resume 仍需按 Template 能力单独补充。
 
 ### Phase 1：最小 Web 控制台
 
@@ -598,10 +567,9 @@ kill；pause/connect/resume 仍需后续补充。
 本机子阶段已于 2026-07-19 跑通：浏览器中的三个页签可管理当前 macOS 已安装的
 OpenClaw，按“龙虾模式 → 性格确认 → 对话”串行执行，完成 Channel 生命周期、
 `SOUL.md` 编辑/校验/恢复、服务端性格门禁、一次性性格问候和真实文字对话。
-云端子阶段已将 APP 以容器部署到 ACS，并通过同集群私网完成新用户领取
-Sandbox、Soul 确认、OpenClaw/Channel 就绪、MiniMax 首次问候、普通文字对话和清理。
-2026-07-20 发布的 `app-v0.2.0` 进一步完成左右分屏云端 UI、运行环境自动识别、
-新用户/已有 Sandbox 入口和 Sandbox Service 专用可观测面板的真实部署验证。
+云端子阶段将 APP 部署到 Huawei CCE，并通过 AgentSphere 完成新用户 Sandbox、Soul
+确认、OpenClaw/Channel 就绪、文字对话和清理的受控验证。运行环境自动识别、
+新用户/已有 Sandbox 入口和 Sandbox Service 专用可观测面板均以当前 CCE 配置为准。
 尚未完成的 Phase 1 项是 connect/pause/resume、JSON 报告下载和参考实现差异测试。
 
 ### Phase 2：按验证需求扩展

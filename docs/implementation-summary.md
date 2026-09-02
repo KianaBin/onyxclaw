@@ -1,11 +1,11 @@
 # OnyxClaw 当前实现工作总结
 
-本文记录截至 2026 年 7 月的项目实现范围、交付物、验证状态和后续边界，作为阶段性
-交接与后续 Provider 扩展的入口。
+本文记录当前项目实现范围、交付物、验证状态和后续边界，作为 Huawei CCE + AgentSphere
+维护的入口。
 
 ## 1. 当前结论
 
-项目已经完成文本对话场景的本地与阿里云 ACS 基础闭环：
+项目提供文本对话场景的本地验证与 Huawei CCE + AgentSphere 云端闭环：
 
 ```text
 进入龙虾模式
@@ -18,7 +18,7 @@
   → kill/reset 清理单个 Sandbox
 ```
 
-本地模式、云端 Provider 配置、ACS 基础设施、OpenClaw 镜像、云端 APP、Channel、
+本地模式、Huawei Provider 配置、OpenClaw 镜像、云端 APP、Channel、
 Bootstrap Saga、E2B SDK 操作和 UI 可观测面板均已有代码与自动化测试。
 
 ## 2. 已实现能力
@@ -41,18 +41,7 @@ Bootstrap Saga、E2B SDK 操作和 UI 可观测面板均已有代码与自动化
 - 统一 Adapter 契约：create、connect、command、file read/write 和 kill；
 - 分阶段错误、Secret 脱敏和失败补偿。
 
-### 2.3 阿里云 ACS
-
-- VPC、双 vSwitch、NAT/SNAT 和 ACS profile 集群 IaC；
-- Agent Sandbox Controller、Sandbox Manager 和 SandboxSet 预热池；
-- Private Protocol、E2B Python SDK 和 `kruise-agents` patch；
-- `Sandbox.create/connect/kill`、`commands.run`、`files.read/write`；
-- OpenClaw 自定义镜像、envd 权限边界和 Gateway 降权启动；
-- 杭州同地域 ACR 镜像同步和 digest 固定部署；
-- E2B smoke、真实 Sandbox、模型和 Channel 端到端验证；
-- 可重复执行的 deploy/destroy 脚本。完整基础设施清理仍需在本阶段结束时显式执行。
-
-### 2.4 云端 APP/BFF
+### 2.3 云端 APP/BFF
 
 - 新用户先领取 Sandbox，再确认 SOUL 并完成 bootstrap；
 - 已有用户按 Sandbox ID connect；
@@ -62,7 +51,7 @@ Bootstrap Saga、E2B SDK 操作和 UI 可观测面板均已有代码与自动化
 - 任一步失败时撤销 token 并 kill 半初始化 Sandbox；
 - 首次 hello、文本对话、重置新用户和资源回收。
 
-### 2.5 UI 和可观测
+### 2.4 UI 和可观测
 
 - 刷新后可在龙虾模式和对话龙虾之间切换；
 - 页签移除数字编号；
@@ -75,29 +64,20 @@ Bootstrap Saga、E2B SDK 操作和 UI 可观测面板均已有代码与自动化
 
 ## 3. 构建与发布
 
-### OpenClaw Sandbox 镜像
+### APP 与 Channel 镜像
 
-- 当前阶段版本：`v0.1.3`；
-- GitHub Actions 构建并推送 GHCR；
-- GitHub Release 保存 OCI archive、manifest、digest 和 checksums；
-- ACS 使用镜像到杭州 ACR 后的不可变 digest。
-
-### 云端 APP 镜像
-
-- 当前阶段版本：`app-v0.3.6`；
-- GHCR 与杭州 ACR 均使用不可变 digest；
-- GitHub Release 包含可由 Docker 24.x 直接加载的
-  `onyxclaw-app-app-v0.3.6-linux-amd64-docker.tar.gz`；
-- Release 同时保存 image manifest、image reference、release notes 和 SHA-256 校验和。
+- 在 `demo-cn-south1` 基于已核验的不可变 digest 构建最小增量层；
+- 构建后在容器内核验 JavaScript 语法和覆盖文件 SHA-256；
+- push、CCE rollout 与 AgentSphere Template 创建/替换均为独立的人工步骤；
+- 当前聊天修复候选的证据见 `huaweicloud-sandbox-resume-bug-tracker.md`。
 
 ## 4. 验证状态
 
 - `npm test`：96 项测试通过；
 - 本地 Phase 0/Phase 1 OpenClaw 验证通过；
-- ACS E2B create、command、file 和 kill smoke 通过；
-- ACS OpenClaw bootstrap、Channel、首次 hello 和对话闭环通过；
-- `app-v0.3.6` ACS Deployment 滚动发布后达到 `1/1 Ready`；
-- GitHub Release 的 APP Docker tar.gz 已确认上传成功；
+- Huawei CCE APP 与 AgentSphere Sandbox 的 create、command、file、bootstrap、Channel 和
+  对话闭环按 tracker 中的受控验证记录执行；
+- CCE rollout 仅在明确授权后执行；
 - UI 在 1440×800 验证页签切换尺寸变化为 0，聊天输入框可见。
 
 ## 5. 当前边界
@@ -118,15 +98,13 @@ Bootstrap Saga、E2B SDK 操作和 UI 可观测面板均已有代码与自动化
 - [本地 Phase 0](./phase0-local.md)
 - [本地 Phase 1](./phase1-local.md)
 - [云 Provider 配置](./provider-config.md)
-- [云厂商 Sandbox Provider 对接指南](./cloud-sandbox-provider-onboarding.md)
-- [阿里云 ACS 对接设计](./alibaba-acs-design.md)
-- [阿里云 ACS IaC 操作说明](../iac/alicloud-acs/README.md)
+- [Huawei CCE + AgentSphere 对接指南](./cloud-sandbox-provider-onboarding.md)
+- [Huawei APP 与 Channel 镜像构建](./huaweicloud-image-build-and-update.md)
+- [实际部署自动化：onyxclaw-one-click](https://github.com/KianaBin/onyxclaw-one-click)
 
 ## 7. 阶段交接建议
 
-1. 把 `app-v0.3.6` 和 `v0.1.3` 作为当前阶段基线；
-2. 后续新增 Provider 时遵循统一 Adapter 和 Provider Profile，不在 APP 内增加厂商分支；
+1. 以 CCE Deployment 与已核验的不可变 image digest 作为当前阶段基线；
+2. 维护 Huawei AgentSphere Profile 与统一 Adapter，不在 APP 内增加未经验证的厂商分支；
 3. 生产化前优先补状态持久化、pause/resume、正式入口和安全审计；
-4. 若当前 ACS 验证环境不再使用，执行 IaC destroy 并检查 NAT、VPC、ACS、SandboxSet
-   和 Sandbox 无遗留；
-5. 清理后保存脱敏验收报告、Release digest 和 checksums，不保留运行时凭据。
+4. 清理后保存脱敏验收报告和 image digest，不保留运行时凭据。

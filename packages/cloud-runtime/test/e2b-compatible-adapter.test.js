@@ -268,7 +268,7 @@ test("wraps provider failures with a stage and redacts secrets", async () => {
     assert.equal(error.code, "CLOUD_RUNTIME_CREATE_FAILED");
     assert.equal(error.statusCode, 401);
     assert.equal(error.requestId, "request-123");
-    assert.doesNotMatch(error.message, /Alibaba|ACS/);
+    assert.doesNotMatch(error.message, /provider-specific private protocol/i);
     assert.doesNotMatch(error.message, new RegExp(secret));
     assert.match(error.message, /\[REDACTED\]/);
     return true;
