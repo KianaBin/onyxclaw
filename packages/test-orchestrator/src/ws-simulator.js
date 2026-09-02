@@ -26,6 +26,11 @@ function deferred(timeoutMs, label) {
   };
 }
 
+function debugChat(event, fields) {
+  if (process.env.ONYXCLAW_DEBUG_CHAT !== "1") return;
+  process.stdout.write(`[DEBUG-chat-v1] ${event} ${JSON.stringify(fields)}\n`);
+}
+
 export class WsPlatformSimulator {
   #port;
   #host;
@@ -34,6 +39,7 @@ export class WsPlatformSimulator {
   #connections = new Map();
   #connectionWaiters = new Map();
   #outboundWaiters = new Map();
+  #outboundReplyWaiters = new Map();
   #nextOutboundWaiters = [];
   #unconsumedOutbound = [];
 
@@ -132,6 +138,16 @@ export class WsPlatformSimulator {
     return waiter.promise;
   }
 
+  async waitForReplyTo(inboundEventId, timeoutMs = 120_000) {
+    const existing = this.#core.outboundEvents.find((event) => event.payload.inReplyTo === inboundEventId);
+    if (existing) return existing;
+    const waiter = deferred(timeoutMs, `outbound reply to inbound event ${inboundEventId}`);
+    this.#outboundReplyWaiters.set(inboundEventId, waiter);
+    try { return await waiter.promise; } finally {
+      if (this.#outboundReplyWaiters.get(inboundEventId) === waiter) this.#outboundReplyWaiters.delete(inboundEventId);
+    }
+  }
+
   #handleConnection(socket) {
     let sessionToken;
     socket.on("message", (data) => {
@@ -154,6 +170,7 @@ export class WsPlatformSimulator {
           sessionToken = session.sessionToken;
           const connection = { socket, ...session, accountId: event.accountId };
           this.#connections.set(event.instanceId, connection);
+          debugChat("channel_registered", { instanceId: event.instanceId, connectionId: session.connectionId });
           socket.send(
             JSON.stringify(
               createEnvelope({
@@ -180,6 +197,7 @@ export class WsPlatformSimulator {
         }
         if (event.eventType === "message.outbound") {
           const result = this.#core.acceptOutbound(sessionToken, event);
+          debugChat("outbound_received", { instanceId: event.instanceId, connectionId: this.#connections.get(event.instanceId)?.connectionId ?? null, outboundEventId: event.eventId, inReplyTo: event.payload.inReplyTo ?? null });
           socket.send(
             JSON.stringify(
               createEnvelope({
@@ -193,17 +211,23 @@ export class WsPlatformSimulator {
           );
           this.#outboundWaiters.get(event.eventId)?.resolve(event);
           this.#outboundWaiters.delete(event.eventId);
+          const replyWaiter = this.#outboundReplyWaiters.get(event.payload.inReplyTo);
+          if (replyWaiter) { replyWaiter.resolve(event); this.#outboundReplyWaiters.delete(event.payload.inReplyTo); }
           const nextWaiter = this.#nextOutboundWaiters.shift();
           if (nextWaiter) nextWaiter.resolve(event);
           else this.#unconsumedOutbound.push(event);
         }
       } catch (error) {
+        debugChat("protocol_error", { errorName: error?.name ?? "Error" });
         socket.close(1008, error.message.slice(0, 120));
       }
     });
-    socket.on("close", () => {
+    socket.on("close", (code) => {
       for (const [instanceId, connection] of this.#connections) {
-        if (connection.socket === socket) this.#connections.delete(instanceId);
+        if (connection.socket === socket) {
+          debugChat("channel_closed", { instanceId, connectionId: connection.connectionId, code });
+          this.#connections.delete(instanceId);
+        }
       }
     });
   }

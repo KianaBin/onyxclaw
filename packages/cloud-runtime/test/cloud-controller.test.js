@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { OnyxclawTransport } from "../../onyxclaw-channel/src/transport-websocket.js";
+import { WsPlatformSimulator } from "../../test-orchestrator/src/ws-simulator.js";
 import { CloudConsoleController } from "../src/cloud-controller.js";
 
 function fixture() {
@@ -116,6 +118,67 @@ test("existing users wait for the resumed OpenClaw Channel before chat is enable
   assert.equal(calls[1][1].instanceId, "saved-claw");
   assert.equal(status.connectionId, "resumed-connection");
   assert.equal(status.mode, "connected");
+});
+
+test("concurrent chat replies are matched to their inbound event", async (t) => {
+  const simulator = new WsPlatformSimulator({ port: 0 });
+  await simulator.start();
+  t.after(() => simulator.stop());
+  simulator.issueBootstrapToken("instance-1", "bootstrap-token");
+
+  const transport = new OnyxclawTransport({
+    platformUrl: simulator.url,
+    instanceId: "instance-1",
+    accountId: "default",
+    bootstrapToken: "bootstrap-token",
+    pluginVersion: "0.1.0",
+    heartbeatIntervalMs: 25,
+    onInbound: async (event, connection) => {
+      if (event.payload.text !== "second") return;
+      connection.sendOutbound({
+        eventId: "out-second",
+        chatId: event.payload.chatId,
+        text: "reply to second",
+        inReplyTo: event.eventId,
+      });
+    },
+  });
+  t.after(() => transport.stop());
+  await transport.start();
+  await simulator.waitForConnection("instance-1");
+
+  const eventIds = ["in-first", "in-second"];
+  const controller = new CloudConsoleController({
+    adapter: {
+      async createSandbox() {
+        return { sandboxId: "sandbox-1" };
+      },
+    },
+    saga: {
+      async prepareSandbox() {},
+      async bootstrapSandbox() {
+        return { connectionId: "connection-1" };
+      },
+    },
+    simulator,
+    instanceIdFactory: () => "instance-1",
+    eventIdFactory: () => eventIds.shift(),
+    buildConfig: () => ({}),
+    timeoutMs: 50,
+  });
+  await controller.startLobsterMode();
+  await controller.confirmSoul("# Concurrent lobster");
+
+  const [first, second] = await Promise.allSettled([
+    controller.sendMessage("first"),
+    controller.sendMessage("second"),
+  ]);
+
+  assert.equal(first.status, "rejected");
+  assert.match(first.reason.message, /outbound reply to inbound event in-first/);
+  assert.equal(second.status, "fulfilled");
+  assert.equal(second.value.inboundEventId, "in-second");
+  assert.equal(second.value.text, "reply to second");
 });
 
 test("resume starts OpenClaw before loading the persistent SFS personality", async () => {

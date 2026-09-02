@@ -20,6 +20,11 @@ function isMissingDataSession(error) {
   return false;
 }
 
+function debugChat(event, fields) {
+  if (process.env.ONYXCLAW_DEBUG_CHAT !== "1") return;
+  process.stdout.write(`[DEBUG-chat-v1] ${event} ${JSON.stringify(fields)}\n`);
+}
+
 export class CloudConsoleController {
   #adapter;
   #saga;
@@ -368,6 +373,7 @@ export class CloudConsoleController {
     if (typeof text !== "string" || !text.trim()) throw new TypeError("消息不能为空");
     const eventId = this.#eventIdFactory();
     const started = Date.now();
+    debugChat("inbound_sent", { inboundEventId: eventId, instanceId: this.#status.instanceId, connectionId: this.#status.connectionId });
     this.#simulator.sendInbound(
       this.#status.instanceId,
       createInboundMessage({
@@ -379,7 +385,14 @@ export class CloudConsoleController {
         text: text.trim(),
       }),
     );
-    const outbound = await this.#simulator.waitForNextOutbound(this.#timeoutMs);
+    let outbound;
+    try {
+      outbound = await this.#simulator.waitForReplyTo(eventId, this.#timeoutMs);
+    } catch (error) {
+      debugChat("outbound_wait_failed", { inboundEventId: eventId, instanceId: this.#status.instanceId, connectionId: this.#status.connectionId, durationMs: Date.now() - started, errorCategory: error instanceof Error && error.message.startsWith("timed out waiting") ? "timeout" : "error" });
+      throw error;
+    }
+    debugChat("outbound_matched", { inboundEventId: eventId, outboundEventId: outbound.eventId, inReplyTo: outbound.payload.inReplyTo ?? null, instanceId: this.#status.instanceId, connectionId: this.#status.connectionId, durationMs: Date.now() - started });
     return {
       text: outbound.payload.text,
       inboundEventId: eventId,
