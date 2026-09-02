@@ -562,4 +562,4 @@ workspace 已落 SFS
 | 2026-08-25 | 文档清理 | 删除已被 v5/v6 证据覆盖的中间镜像、事件和实验明细，并将仍有效的根因判断改由 v6 实测支撑 | 本文 | 待提交 | 文档中已无对应旧版本名称、digest、generation 或 Sandbox 标识 | 完成 |
 | 2026-08-25 | 服务端反馈 | 记录相关负责人确认恢复 500/Agent Gateway failed 的组件归属，并保留内部机制和 paused kill 两项待查问题 | 本文 | 待提交 | 已更新状态、问题摘要、事件 L、H1 和实验记录 | 完成 |
 | 2026-08-25 | 文档重构 | 文档开头新增结论与修复验证；问题摘要只保留问题现象，详细证据继续放在时间线、假设和实验记录 | 本文 | 待提交 | 已明确 APP 已修复项、v6 验证结果、Agent Gateway 归属及 paused kill 遗留问题 | 完成 |
-| 2026-09-02 | 代码修复 | 新增 `waitForReplyTo(inboundEventId)`，聊天按 outbound `payload.inReplyTo` 精确匹配；新增开关控制的 `[DEBUG-chat-v1]` 脱敏 event trace 与并发回归 | `cloud-controller.js`、`ws-simulator.js` 及对应测试 | `yqb-dev` / 待提交、待镜像 | 定向 18/18；全量 `npm test` 119/119；v19 运行时代码基线为 `origin/fix` | 仅本地验证；未构建、推送或部署 |
+| 2026-09-02 | 代码修复与镜像构建 | 新增 `waitForReplyTo(inboundEventId)`，聊天按 outbound `payload.inReplyTo` 精确匹配；新增开关控制的 `[DEBUG-chat-v1]` 脱敏 event trace 与并发回归。v20 基于 v19 不可变 digest 构建，仅覆盖两个运行文件 | `cloud-controller.js`、`ws-simulator.js` 及对应测试；远端独立构建目录 | `yqb-dev` `2c09364`；本地 Docker image `0c13e0f34c59` | 定向 18/18；全量 `npm test` 119/119；镜像 build 成功 | SWR push 被拒绝 `denied: you do not have the permission`；未 rollout，需具备目标仓库推送权限后继续 |
