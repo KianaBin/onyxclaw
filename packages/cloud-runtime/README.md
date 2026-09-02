@@ -1,5 +1,7 @@
 # Cloud APP runtime
 
+> 状态：**当前参考**。本文件说明云端 APP/BFF 的实现语义；行为冲突时，以本包代码和 `npm run test:cloud` 的回归测试为准。
+
 该包承载云端 APP/BFF 的厂商适配与 OpenClaw 创建编排，不依赖本机 macOS Driver。
 
 当前包含：

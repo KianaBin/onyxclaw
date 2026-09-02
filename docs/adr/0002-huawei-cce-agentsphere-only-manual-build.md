@@ -1,5 +1,7 @@
 # 仅支持 Huawei CCE + AgentSphere，并在开发机人工构建
 
+> 状态：**已采纳（当前规范）**
+
 OnyxClaw 只支持 Huawei Cloud CCE 承载 APP、AgentSphere 提供 Sandbox 的云部署组合。本仓只保留 APP 与 Channel 两类镜像的构建和更新方案：APP 包含稳定 v19 基线及其明确派生补丁，Channel 从干净 AgentSphere OpenClaw 基础镜像构建；不保留其他云厂商内容、具体部署清单、发布工作流或历史部署材料。
 
 镜像在 `demo-cn-south1` 开发机上从已核验的不可变基线镜像构建。构建、镜像 push、CCE rollout 和 Template 创建/替换是彼此独立的人工受控步骤；默认不执行 push 或 rollout。

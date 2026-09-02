@@ -1,5 +1,7 @@
 # Huawei Cloud 镜像构建与更新方案
 
+> 状态：**当前指南**。本指南只覆盖 APP 与 Channel 镜像的构建和更新边界；不会执行 push、CCE rollout 或 Template 变更。
+
 本仓维护四个清晰的镜像构建层次：稳定的 OnyxClaw APP v19、从 v19 派生的 APP 聊天交付补丁、
 干净的 AgentSphere OpenClaw 基础镜像，以及从该基础镜像构建的完整 OnyxClaw Channel 镜像。
 APP 负责请求/回复关联，Channel 负责将模型输出投递为出站事件。
@@ -104,8 +106,8 @@ Dockerfile 会在基础镜像不包含 `/app/openclaw.mjs`，或其 `/app/packag
 1. 运行完整测试和 Dockerfile 构建契约测试。
 2. 先构建或核验第 1 步 APP v19 和第 3 步干净 OpenClaw 基础镜像；若基线已变，先明确新增版本目录，不修改既有稳定版本。
 3. 按需构建第 2 步 APP 聊天补丁与第 4 步完整 Channel 镜像，并完成容器内语法/哈希核验。
-4. 将候选的本地 image ID、基线 digest、覆盖文件哈希和测试结果追加到
-   [bug tracker](./huaweicloud-sandbox-resume-bug-tracker.md)。
+4. 将候选的镜像 `tag@digest`、覆盖文件哈希和测试结果追加到
+   [bug tracker](./huaweicloud-sandbox-resume-bug-tracker.md)；不记录本地构建目录、endpoint 或运行资源标识。
 5. 仅在发布负责人明确授权后，按 [onyxclaw-one-click](https://github.com/KianaBin/onyxclaw-one-click)
    执行镜像推送、CCE 更新、Template 更新及新 Sandbox 验收。
 
