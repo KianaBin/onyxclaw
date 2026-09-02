@@ -38,6 +38,7 @@ export class CloudConsoleController {
   #eventIdFactory;
   #chatId;
   #helloResponse;
+  #helloPromise;
   #soul;
   #soulRestore;
   #status;
@@ -341,6 +342,7 @@ export class CloudConsoleController {
     this.#soul = this.#defaultSoul;
     this.#soulRestore = this.#defaultSoul;
     this.#helloResponse = undefined;
+    this.#helloPromise = undefined;
     this.#status = {
       mode: "idle",
       currentStep: "mode",
@@ -373,22 +375,26 @@ export class CloudConsoleController {
     if (typeof text !== "string" || !text.trim()) throw new TypeError("消息不能为空");
     const eventId = this.#eventIdFactory();
     const started = Date.now();
+    const instanceId = this.#status.instanceId;
     debugChat("inbound_sent", { inboundEventId: eventId, instanceId: this.#status.instanceId, connectionId: this.#status.connectionId });
-    this.#simulator.sendInbound(
-      this.#status.instanceId,
-      createInboundMessage({
-        eventId,
-        instanceId: this.#status.instanceId,
-        accountId: this.#accountId,
-        senderId: "cloud-app-user",
-        chatId: this.#chatId,
-        text: text.trim(),
-      }),
-    );
+    const outboundPromise = this.#simulator.waitForReply(instanceId, eventId, this.#timeoutMs);
     let outbound;
     try {
-      outbound = await this.#simulator.waitForReplyTo(eventId, this.#timeoutMs);
+      this.#simulator.sendInbound(
+        instanceId,
+        createInboundMessage({
+          eventId,
+          instanceId,
+          accountId: this.#accountId,
+          senderId: "cloud-app-user",
+          chatId: this.#chatId,
+          text: text.trim(),
+        }),
+      );
+      outbound = await outboundPromise;
     } catch (error) {
+      this.#simulator.cancelReply?.(instanceId, eventId, error);
+      await outboundPromise.catch(() => undefined);
       debugChat("outbound_wait_failed", { inboundEventId: eventId, instanceId: this.#status.instanceId, connectionId: this.#status.connectionId, durationMs: Date.now() - started, errorCategory: error instanceof Error && error.message.startsWith("timed out waiting") ? "timeout" : "error" });
       throw error;
     }
@@ -404,10 +410,20 @@ export class CloudConsoleController {
 
   async sayHello() {
     if (this.#helloResponse) return { ...this.#helloResponse, alreadySent: true };
-    const response = await this.sendMessage(
+    if (this.#helloPromise) {
+      const response = await this.#helloPromise;
+      return { ...response, alreadySent: true };
+    }
+    this.#helloPromise = this.sendMessage(
       "这是你和新用户的第一次见面。请基于当前性格设定主动说一声 hello，并做一句简短的自我介绍。",
-    );
-    this.#helloResponse = { ...response, alreadySent: false };
-    return this.#helloResponse;
+    )
+      .then((response) => {
+        this.#helloResponse = { ...response, alreadySent: false };
+        return this.#helloResponse;
+      })
+      .finally(() => {
+        this.#helloPromise = undefined;
+      });
+    return this.#helloPromise;
   }
 }

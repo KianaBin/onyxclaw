@@ -83,3 +83,15 @@ test("cloud APP shares Sandbox Service telemetry between the ACS adapter and UI"
   assert.match(source, /deploymentMode:\s*"cloud"/);
   assert.match(source, /providerId,/);
 });
+
+test("CCE chat-delivery patch images use verified immutable bases and copy only runtime files", async () => {
+  const appPatch = await read("deploy/huaweicloud-cce/Dockerfile.chat-delivery-v21");
+  const channelPatch = await read("deploy/huaweicloud-cce/Dockerfile.channel-chat-delivery-v21");
+
+  assert.match(appPatch, /onyxclaw-app@sha256:fe0c5274fff79897fce53634756694edc9799f393e3e3dde416d604749788293/);
+  assert.match(appPatch, /COPY packages\/cloud-runtime\/src\/cloud-controller\.js/);
+  assert.match(appPatch, /COPY packages\/test-orchestrator\/src\/ws-simulator\.js/);
+  assert.match(appPatch, /COPY packages\/local-console\/public\/app\.js/);
+  assert.match(channelPatch, /onyxclaw-openclaw@sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5/);
+  assert.match(channelPatch, /COPY packages\/onyxclaw-channel\/src\/inbound\.js/);
+});

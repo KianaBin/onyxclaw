@@ -533,6 +533,9 @@ workspace 已落 SFS
 | 2026-08-25 | 恢复失败后重置新用户 | `0.3.8-resume-rebootstrap-v6` | paused Sandbox kill 失败，普通“重置新用户”被阻断 | 用户实测；原始 kill 状态码/request ID 待采集 | 新增衍生问题事件 K；跳过清理只能恢复本地流程，旧 Sandbox 必须作为 orphan 跟踪 |
 | 2026-08-25 | 服务端问题归属确认 | `0.3.8-resume-rebootstrap-v6` | 相关负责人确认恢复外层 500、`agent gateway ... failed` 是 Agent Gateway 问题 | 用户转述的负责人反馈 | APP re-bootstrap 不再作为该 500 的修复方向；Agent Gateway 内部原因仍待服务侧定位 |
 | 2026-09-02 07:21 | APP 聊天 outbound 关联回归 | 本地 `yqb-dev` / 未部署 | 修复前 10/11，真实 WebSocket 场景稳定复现 `timed out waiting for next outbound event`；修复后定向 18/18、全量 119/119 通过 | Controller -> Simulator -> Channel Transport；不记录用户消息或密钥 | 全局 next-outbound waiter 会错配并发请求；按 `payload.inReplyTo` 关联后，缺少回复的请求独立超时，另一请求不再被误消费 |
+| 2026-09-02 09:12 | CCE APP 运行基线核验 | `onyxclaw-demo/onyxclaw-app` Pod Ready | Deployment tag 为 `0.3.8-session-routing-debug-nodelay-wait5s-v19`，运行 imageID 与 v19 digest 一致 | `sha256:fe0c5274fff79897fce53634756694edc9799f393e3e3dde416d604749788293`；远端 `kubectl` 只读查询 | 后续 APP 补丁必须 `FROM` 此不可变 digest；节点 Docker 缓存中的 v12-4 不是 APP 发布基线 |
+| 2026-09-02 09:18 | Channel 模板运行基线核验 | 用户确认当前 Template 镜像；远端 Docker 只读核验 | 当前基线为 `onyxclaw-openclaw:0.3.8-channel-error-fix`，目标 `inbound.js` 与本地修复前版本哈希相同 | digest `sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5`；`inbound.js` SHA-256 `19df8e39…c11da` | Channel 补丁必须改为 `FROM` 此不可变 digest；此前基于 v12-4 的未推送本地候选不得发布 |
+| 2026-09-02 09:20 | 双镜像候选构建与容器内核验 | 远端独立目录 `/home/hzp/onyxclaw-chat-delivery-v21` | APP 仅覆盖 Controller、Simulator、UI；Channel 仅覆盖 `inbound.js`；四个镜像内文件哈希均与本地受测源码一致，四个 JS 均通过 `node --check` | APP local ID `41bd35d2dbc1`；Channel local ID `4a40f5f68bd9`；不记录密钥 | 两份候选均未推送到 SWR、未 rollout、未创建/替换 Template；等待 registry 登录后才可发布 |
 
 ## 变更记录
 
@@ -563,3 +566,5 @@ workspace 已落 SFS
 | 2026-08-25 | 服务端反馈 | 记录相关负责人确认恢复 500/Agent Gateway failed 的组件归属，并保留内部机制和 paused kill 两项待查问题 | 本文 | 待提交 | 已更新状态、问题摘要、事件 L、H1 和实验记录 | 完成 |
 | 2026-08-25 | 文档重构 | 文档开头新增结论与修复验证；问题摘要只保留问题现象，详细证据继续放在时间线、假设和实验记录 | 本文 | 待提交 | 已明确 APP 已修复项、v6 验证结果、Agent Gateway 归属及 paused kill 遗留问题 | 完成 |
 | 2026-09-02 | 代码修复与镜像构建 | 新增 `waitForReplyTo(inboundEventId)`，聊天按 outbound `payload.inReplyTo` 精确匹配；新增开关控制的 `[DEBUG-chat-v1]` 脱敏 event trace 与并发回归。v20 基于 v19 不可变 digest 构建，仅覆盖两个运行文件 | `cloud-controller.js`、`ws-simulator.js` 及对应测试；远端独立构建目录 | `yqb-dev` `2c09364`；本地 Docker image `0c13e0f34c59` | 定向 18/18；全量 `npm test` 119/119；镜像 build 成功 | SWR push 被拒绝 `denied: you do not have the permission`；未 rollout，需具备目标仓库推送权限后继续 |
+| 2026-09-02 | 代码修复与构建契约 | Channel 改走 `dispatchReply`；APP 在发送入站前登记复合关联等待者，断连/重置清理等待者；UI 在 hello 期间禁止发送。新增基于 CCE v19 与已核验 `channel-error-fix` digest 的最小增量 Dockerfile | `inbound.js`、`cloud-controller.js`、`ws-simulator.js`、`app.js`、对应测试及两个 CCE Dockerfile | `yqb-dev` / 未提交 | 定向 26/26、全量 `npm test` 121/121；APP 候选已构建，正确 Channel 基线候选待重建 | 不替换 Template，仍由各 Release Account 手工创建；此前 v12-4 Channel 候选未推送、不得发布 |
+| 2026-09-02 | 候选镜像构建 | v19 APP 和 `channel-error-fix` Channel 的最小增量层已在远端构建；容器内语法、目标文件 SHA-256 和构建契约均通过 | 远端独立构建目录；两个 v21 Dockerfile | APP `41bd35d2dbc1`；Channel `4a40f5f68bd9` | 定向 26/26、`npm test` 121/121、构建契约 6/6、容器内 4 文件哈希匹配 | 待用户完成目标 SWR registry 登录后 push；之后回拉 digest、创建新 Template、用新 Sandbox 做 P0 验收 |

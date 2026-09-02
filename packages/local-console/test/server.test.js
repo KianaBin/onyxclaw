@@ -371,6 +371,8 @@ test("web UI exposes a single reset button, full-width architecture, and 5-colum
   assert.match(browserApp, /function beginNewUiSession/);
   assert.match(browserApp, /uiSessionAbortController\.abort\(\)/);
   assert.match(browserApp, /generation !== uiSessionGeneration/);
+  assert.match(browserApp, /const chatReady = connected && status\.soulConfirmed && !helloLoading/);
+  assert.match(browserApp, /if \(!text \|\| helloLoading\) return/);
   assert.match(browserApp, /async function enterLobsterMode/);
   assert.match(browserApp, /clearApiCallsUi/);
   assert.match(browserApp, /resolveTabState/);
