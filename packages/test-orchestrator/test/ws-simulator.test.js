@@ -44,7 +44,7 @@ test("plugin transport registers, receives inbound, and returns outbound", async
       text: "ping",
     }),
   );
-  const outbound = await simulator.waitForNextOutbound();
+  const outbound = await simulator.waitForReplyTo("in-1");
 
   assert.equal(received.length, 1);
   assert.equal(outbound.payload.text, "pong");

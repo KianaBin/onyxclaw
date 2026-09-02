@@ -532,6 +532,7 @@ workspace 已落 SFS
 | 2026-08-24 13:37 | v6 同一 Sandbox 三轮 pause/resume | `0.3.8-resume-rebootstrap-v6` / CCE generation 37 | 前两轮 connect、SOUL、配置刷新、readyz 全部成功，写配置到 ready 分别约 6.622/6.937 秒；第三轮起五次 connect 均 500/400 | APP `/api/observability` 脱敏快照；Sandbox 尾部标识 `5311db6`；单 Pod、0 restart | v6 re-bootstrap 已验证；间歇现象收敛为同一 Sandbox 多轮后 Agent Gateway 恢复 session 稳定失败 |
 | 2026-08-25 | 恢复失败后重置新用户 | `0.3.8-resume-rebootstrap-v6` | paused Sandbox kill 失败，普通“重置新用户”被阻断 | 用户实测；原始 kill 状态码/request ID 待采集 | 新增衍生问题事件 K；跳过清理只能恢复本地流程，旧 Sandbox 必须作为 orphan 跟踪 |
 | 2026-08-25 | 服务端问题归属确认 | `0.3.8-resume-rebootstrap-v6` | 相关负责人确认恢复外层 500、`agent gateway ... failed` 是 Agent Gateway 问题 | 用户转述的负责人反馈 | APP re-bootstrap 不再作为该 500 的修复方向；Agent Gateway 内部原因仍待服务侧定位 |
+| 2026-09-02 07:21 | APP 聊天 outbound 关联回归 | 本地 `yqb-dev` / 未部署 | 修复前 10/11，真实 WebSocket 场景稳定复现 `timed out waiting for next outbound event`；修复后定向 18/18、全量 119/119 通过 | Controller -> Simulator -> Channel Transport；不记录用户消息或密钥 | 全局 next-outbound waiter 会错配并发请求；按 `payload.inReplyTo` 关联后，缺少回复的请求独立超时，另一请求不再被误消费 |
 
 ## 变更记录
 
@@ -561,3 +562,4 @@ workspace 已落 SFS
 | 2026-08-25 | 文档清理 | 删除已被 v5/v6 证据覆盖的中间镜像、事件和实验明细，并将仍有效的根因判断改由 v6 实测支撑 | 本文 | 待提交 | 文档中已无对应旧版本名称、digest、generation 或 Sandbox 标识 | 完成 |
 | 2026-08-25 | 服务端反馈 | 记录相关负责人确认恢复 500/Agent Gateway failed 的组件归属，并保留内部机制和 paused kill 两项待查问题 | 本文 | 待提交 | 已更新状态、问题摘要、事件 L、H1 和实验记录 | 完成 |
 | 2026-08-25 | 文档重构 | 文档开头新增结论与修复验证；问题摘要只保留问题现象，详细证据继续放在时间线、假设和实验记录 | 本文 | 待提交 | 已明确 APP 已修复项、v6 验证结果、Agent Gateway 归属及 paused kill 遗留问题 | 完成 |
+| 2026-09-02 | 代码修复与镜像构建 | 新增 `waitForReplyTo(inboundEventId)`，聊天按 outbound `payload.inReplyTo` 精确匹配；新增开关控制的 `[DEBUG-chat-v1]` 脱敏 event trace 与并发回归。v20 基于 v19 不可变 digest 构建，仅覆盖两个运行文件 | `cloud-controller.js`、`ws-simulator.js` 及对应测试；远端独立构建目录 | `yqb-dev` `2c09364`；本地 Docker image `0c13e0f34c59` | 定向 18/18；全量 `npm test` 119/119；镜像 build 成功 | SWR push 被拒绝 `denied: you do not have the permission`；未 rollout，需具备目标仓库推送权限后继续 |
