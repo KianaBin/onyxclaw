@@ -19,6 +19,8 @@ test("cloud APP uses the Huawei AgentSphere default profile and shared telemetry
 });
 
 test("v19 APP baseline, Channel image, and chat-delivery patches have explicit build contracts", async () => {
+  const fullApp = await read("deploy/huaweicloud-cce/Dockerfile.app");
+  const appRequirements = await read("deploy/huaweicloud-cce/requirements.txt");
   const appV19 = await read("deploy/huaweicloud-cce/app-v19/Dockerfile");
   const appV19Controller = await read("deploy/huaweicloud-cce/app-v19/cloud-controller.js");
   const appPatch = await read("deploy/huaweicloud-cce/Dockerfile.chat-delivery-v21");
@@ -28,6 +30,17 @@ test("v19 APP baseline, Channel image, and chat-delivery patches have explicit b
     "deploy/huaweicloud-agentsphere-openclaw/openclaw.with-channel.default.json",
   );
 
+  assert.match(fullApp, /FROM node:22-bookworm-slim/);
+  assert.match(fullApp, /python3 python3-venv/);
+  assert.match(fullApp, /COPY deploy\/huaweicloud-cce\/requirements\.txt \/tmp\/requirements\.txt/);
+  assert.match(fullApp, /pip install --no-cache-dir -r \/tmp\/requirements\.txt/);
+  assert.match(fullApp, /from e2b import Sandbox/);
+  assert.match(fullApp, /npm ci --omit=dev --ignore-scripts/);
+  assert.match(fullApp, /COPY config\/ \.\/config\//);
+  assert.match(fullApp, /COPY packages\/ \.\/packages\//);
+  assert.match(fullApp, /ONYXCLAW_E2B_PYTHON=\/opt\/venv\/bin\/python/);
+  assert.match(fullApp, /CMD \["node", "packages\/cloud-runtime\/src\/cloud-app\.js"\]/);
+  assert.match(appRequirements, /^e2b==2\.24\.0$/m);
   assert.match(appV19, /onyxclaw-app@sha256:d5cdc18a427751f357c0c4aed8e75823ccfdc4eabe7b55a39125217c3d274f18/);
   assert.match(appV19, /E2B_DATA_SESSION_WAIT_SECONDS=5/);
   assert.match(appV19, /COPY --chown=node:node cloud-controller\.js/);

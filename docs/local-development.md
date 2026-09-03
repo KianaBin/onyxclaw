@@ -17,6 +17,25 @@ npm test
 
 WebSocket 测试只绑定 loopback；受限开发环境可能需要授予本地网络权限。
 
+## 远端 Docker 构建器与调试边界
+
+`demo-cn-south1` 是受控的 Docker 构建器，不是源码工作区或测试环境。它没有 Git、Node.js
+或 npm；不得在其上拉取分支、编辑源码、安装依赖或运行仓库测试。唯一允许的源码输入是本机
+[`yqb-dev`](../README.md) 分支中一个干净、固定的 Git 提交。
+
+每次远端构建按以下顺序执行：
+
+1. 在本机 `yqb-dev` 工作区确认 `git status --short` 为空，记录 `git rev-parse HEAD`，并运行所需的回归测试。
+2. 使用 `git archive <commit>` 打包该提交的最小构建上下文，通过 SSH 传入远端新建的 `mktemp -d` 临时目录；不要复制本机 `node_modules`、`.git`、配置文件、凭据或旧构建目录。
+3. 在远端临时目录只运行 Docker build、容器内语法检查和目标文件 SHA-256 核验。构建参数必须引用明确的基础镜像 `image@sha256`。
+4. 将候选镜像 `tag@digest`、覆盖文件哈希和验证结果记录到故障追踪器；构建成功本身不表示已 push 或已部署。
+5. 结束后逐个删除该次明确的远端临时构建目录；保留镜像仅作为本地候选，不能替代 registry digest 或已部署镜像的证据。
+
+APP 与 Channel 的 Dockerfile、基线和容器内核验项见
+[Huawei Cloud 镜像构建与更新方案](./huaweicloud-image-build-and-update.md)。实际 CCE 更新仍由
+[onyxclaw-one-click](https://github.com/KianaBin/onyxclaw-one-click) 负责；在开始 rollout 前，必须
+先通过只读 `kubectl` 预检确认集群可达、当前运行 digest 与回滚锚点。
+
 ## Phase 0：本机 Channel 生命周期回归
 
 ```bash

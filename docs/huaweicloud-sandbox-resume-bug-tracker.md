@@ -37,6 +37,10 @@
 | 2026-08-25 | 清理风险 | 恢复失败后的暂停实例清理未完成。 | 保留残留资源状态并由服务端/运维流程继续处理。 |
 | 2026-09-02 | 聊天并发回归 | 修复前真实 WebSocket 场景稳定复现 outbound 等待超时；按 `inReplyTo` 关联后，定向与全量回归通过。 | 以回复关联键隔离并发等待，缺失回复只让自身超时。 |
 | 2026-09-02 | 双镜像候选 | APP 与 Channel 候选均完成容器内语法、目标文件哈希和构建契约校验。 | 候选未推送、未 rollout、未替换 Template；发布须另获明确授权。 |
+| 2026-09-03 | 新调试环境候选构建与发布 | 固定提交 `a4895b4` 的最小上下文在受控 Docker 构建机中构建 APP v21、最小 Channel 补丁与完整 Channel 镜像；覆盖文件、插件入口、依赖软链接和模块导入均通过容器内校验。随后已推送 APP `swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-app:0.3.9-chat-delivery-correlation-v21@sha256:9f3bd8bd484c6276add07cf4aa16d1fce8d19ab2c463a10721bf3d9f624a5516` 和完整 Channel `swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.9-channel-full-v21@sha256:0b930587f3d95e428f472c7ec81e45a4a58814f439cfe3cebc9467124d1f9044`。 | 最小 Channel 补丁未推送；尚未 rollout、未替换 Template，需在实际部署环境做端到端验证。 |
+| 2026-09-03 | Channel 父镜像纠正 | 复核后确认当前 Channel 发布应从现网 `0.3.8-channel-error-fix@sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5` 派生，而非从干净 AgentSphere 基础层重组。已使用该 digest 重建并推送 `swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.9-channel-error-fix-v21@sha256:8e314ad47a49eb57cab244fcbf52e456c4e8ae6d32e8bf732c6549bb083803e8`；容器内 `inbound.js` SHA-256 与固定提交 `a4895b4` 一致。 | `0.3.9-channel-full-v21` 已存在于 registry，但父镜像不符合当前补丁发布策略，未 rollout、不得用于本次部署；正确候选仍需在实际环境做端到端验证。 |
+| 2026-09-03 | 误建完整 Channel 本地清理 | 按发布负责人指示，已从受控构建机移除误建 `0.3.9-channel-full-v21` 的本地构建标签和本地 registry 引用；正确的 `0.3.9-channel-error-fix-v21` 标签仍可用。 | 未调用 SWR 删除接口，远端误建标签由发布负责人自行删除；未 rollout、未替换 Template。 |
+| 2026-09-03 | 发布前镜像验收 | 发布负责人确认本次镜像构建、父镜像派生关系、容器内文件校验及误建候选本地清理均验收通过。 | 验收对象为 APP v21 与 `0.3.9-channel-error-fix-v21` 镜像；不等同于 CCE rollout、Template 替换或真实聊天端到端验收。 |
 
 ## 后续验收边界
 
@@ -52,3 +56,5 @@
 | 日期 | 变更 | 验证 |
 | --- | --- | --- |
 | 2026-09-02 | 以 [ADR 0003](./adr/0003-current-document-boundaries.md) 确立当前文档/历史证据边界；将本地开发、架构、镜像构建和 Huawei 配置收敛为单一当前来源，并删除已提取的旧方案与静态报告。 | README 导航、13 份 Markdown 的相对链接、旧文档/旧云厂商引用扫描、`git diff --check`、`npm test` 110/110 通过；交互式架构图完成结构和桌面视觉检查。 |
+| 2026-09-03 | 在本地开发指南中明确远端 Docker 构建器边界：源码只来自干净的 `yqb-dev` 固定提交，经最小构建上下文传入临时目录；远端不承担 Git、Node.js、npm 或测试职责。 | 本机与远端运行时盘点确认；`git diff --check` 和 Markdown 相对链接校验通过。 |
+| 2026-09-03 | 新增 Huawei APP 全量 Dockerfile 与固定 `e2b==2.24.0` 运行时依赖，保留 v19 最小更新 Dockerfile，形成“新建环境 / 已有 v19 环境更新”两条构建路径。 | 全量 `npm test` 110/110、构建契约测试通过；本机 Docker daemon 未运行，真实镜像构建须在本次改动提交后由远端 Docker 构建器执行。 |
