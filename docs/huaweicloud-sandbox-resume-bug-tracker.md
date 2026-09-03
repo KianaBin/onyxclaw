@@ -41,6 +41,7 @@
 | 2026-09-03 | Channel 父镜像纠正 | 复核后确认当前 Channel 发布应从现网 `0.3.8-channel-error-fix@sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5` 派生，而非从干净 AgentSphere 基础层重组。已使用该 digest 重建并推送 `swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw:0.3.9-channel-error-fix-v21@sha256:8e314ad47a49eb57cab244fcbf52e456c4e8ae6d32e8bf732c6549bb083803e8`；容器内 `inbound.js` SHA-256 与固定提交 `a4895b4` 一致。 | `0.3.9-channel-full-v21` 已存在于 registry，但父镜像不符合当前补丁发布策略，未 rollout、不得用于本次部署；正确候选仍需在实际环境做端到端验证。 |
 | 2026-09-03 | 误建完整 Channel 本地清理 | 按发布负责人指示，已从受控构建机移除误建 `0.3.9-channel-full-v21` 的本地构建标签和本地 registry 引用；正确的 `0.3.9-channel-error-fix-v21` 标签仍可用。 | 未调用 SWR 删除接口，远端误建标签由发布负责人自行删除；未 rollout、未替换 Template。 |
 | 2026-09-03 | 发布前镜像验收 | 发布负责人确认本次镜像构建、父镜像派生关系、容器内文件校验及误建候选本地清理均验收通过。 | 验收对象为 APP v21 与 `0.3.9-channel-error-fix-v21` 镜像；不等同于 CCE rollout、Template 替换或真实聊天端到端验收。 |
+| 2026-09-03 | PR 合并前构建契约修正 | APP v21 Dockerfile 已迁移至 `deploy/huaweicloud-cce/app-v21/`；构建契约测试、构建文档和完整 APP Dockerfile 注释同步改为新路径。 | `npm test` 110/110 通过；修正前测试因读取旧路径而失败，未创建带失败测试的 PR。 |
 
 ## 后续验收边界
 

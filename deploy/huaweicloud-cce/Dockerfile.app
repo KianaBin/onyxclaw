@@ -1,5 +1,5 @@
 # Full APP image for a new Huawei CCE environment. Existing v19 deployments
-# should use Dockerfile.chat-delivery-v21 for the smallest verified update.
+# should use app-v21/Dockerfile.chat-delivery-v21 for the smallest verified update.
 FROM node:22-bookworm-slim
 
 USER root

@@ -23,8 +23,8 @@ test("v19 APP baseline, Channel image, and chat-delivery patches have explicit b
   const appRequirements = await read("deploy/huaweicloud-cce/requirements.txt");
   const appV19 = await read("deploy/huaweicloud-cce/app-v19/Dockerfile");
   const appV19Controller = await read("deploy/huaweicloud-cce/app-v19/cloud-controller.js");
-  const appPatch = await read("deploy/huaweicloud-cce/Dockerfile.chat-delivery-v21");
-  const channelPatch = await read("deploy/huaweicloud-cce/Dockerfile.channel-chat-delivery-v21");
+  const appPatch = await read("deploy/huaweicloud-cce/app-v21/Dockerfile.chat-delivery-v21");
+  const channelPatch = await read("deploy/huaweicloud-cce/app-v21/Dockerfile.channel-chat-delivery-v21");
   const channelImage = await read("deploy/huaweicloud-agentsphere-openclaw/Dockerfile.channel");
   const channelDefaultConfig = await read(
     "deploy/huaweicloud-agentsphere-openclaw/openclaw.with-channel.default.json",

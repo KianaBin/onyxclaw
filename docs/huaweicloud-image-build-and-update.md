@@ -61,7 +61,7 @@ v19 从其父 APP 不可变 digest 继承，只覆盖 `cloud-controller.js`，�
 
 ## 3. 已有 v19 环境更新：APP 聊天交付补丁（v21）
 
-构建文件：[Dockerfile.chat-delivery-v21](../deploy/huaweicloud-cce/Dockerfile.chat-delivery-v21)。
+构建文件：[Dockerfile.chat-delivery-v21](../deploy/huaweicloud-cce/app-v21/Dockerfile.chat-delivery-v21)。
 
 它从已核验的 APP 不可变 digest 继承，只覆盖：
 
@@ -73,7 +73,7 @@ v19 从其父 APP 不可变 digest 继承，只覆盖 `cloud-controller.js`，�
 
 ```bash
 docker build \
-  -f deploy/huaweicloud-cce/Dockerfile.chat-delivery-v21 \
+  -f deploy/huaweicloud-cce/app-v21/Dockerfile.chat-delivery-v21 \
   -t <registry>/onyxclaw-app:<chat-delivery-tag> \
   .
 ```
@@ -103,12 +103,12 @@ docker build \
 `packages/onyxclaw-channel/src/inbound.js`。这样保留现有 Channel、OpenClaw 和 AgentSphere
 运行时的其余层，变更范围严格限于聊天出站事件关联修复。
 
-构建文件：[Dockerfile.channel-chat-delivery-v21](../deploy/huaweicloud-cce/Dockerfile.channel-chat-delivery-v21)。
+构建文件：[Dockerfile.channel-chat-delivery-v21](../deploy/huaweicloud-cce/app-v21/Dockerfile.channel-chat-delivery-v21)。
 构建时必须使用 digest，而不能只写可变 tag：
 
 ```bash
 docker build \
-  -f deploy/huaweicloud-cce/Dockerfile.channel-chat-delivery-v21 \
+  -f deploy/huaweicloud-cce/app-v21/Dockerfile.channel-chat-delivery-v21 \
   --build-arg OPENCLAW_IMAGE=swr.cn-south-1.myhuaweicloud.com/demo-test/onyxclaw-openclaw@sha256:d29c37290298d374dd6438ae92ee2def3dadf9e1f7599704f341483c302442b5 \
   -t <registry>/onyxclaw-openclaw:<channel-patch-tag> \
   .
