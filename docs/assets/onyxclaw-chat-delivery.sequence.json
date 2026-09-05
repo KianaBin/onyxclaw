@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": { "title": "OnyxClaw 聊天交付时序", "locale": "zh-CN", "quality_profile": "showcase", "column_fit": "spread", "viewBox": [1040, 800] },
+  "participants": [
+    { "id": "browser", "type": "frontend", "label": "浏览器 UI" },
+    { "id": "app", "type": "backend", "label": "OnyxClaw APP / BFF", "sublabel": "CloudController" },
+    { "id": "channel", "type": "backend", "label": "Sandbox 内 Channel" },
+    { "id": "gateway", "type": "backend", "label": "OpenClaw Gateway" },
+    { "id": "model", "type": "external", "label": "模型服务" }
+  ],
+  "messages": [
+    { "id": "send", "from": "browser", "to": "app", "y": 190, "label": "发送聊天消息", "variant": "emphasis" },
+    { "id": "inbound", "from": "app", "to": "channel", "y": 280, "label": "WebSocket 入站事件（eventId, chatId, text）", "variant": "emphasis", "note": "APP 先登记 Reply Correlation Key（instanceId + inboundEventId），不能按下一条回复或 FIFO 匹配。" },
+    { "id": "dispatch", "from": "channel", "to": "gateway", "y": 370, "label": "dispatchInboundEvent", "note": "Channel 绑定当前入站 eventId。" },
+    { "id": "generate", "from": "gateway", "to": "model", "y": 450, "label": "生成回复" },
+    { "id": "reply", "from": "model", "to": "gateway", "y": 530, "label": "回复内容", "variant": "return" },
+    { "id": "deliver", "from": "gateway", "to": "channel", "y": 610, "label": "交付回复", "variant": "return" },
+    { "id": "outbound", "from": "channel", "to": "app", "y": 690, "label": "WebSocket 出站事件（inReplyTo = inboundEventId）", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "rose", "title": "关联不变量", "items": ["每个出站回复必须携带 inReplyTo", "APP 使用实例 ID 与入站事件 ID 将回复交还给原请求", "模型失败也应交付关联的可操作错误回复"] }
+  ]
+}

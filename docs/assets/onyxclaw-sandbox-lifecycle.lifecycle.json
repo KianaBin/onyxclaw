@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": { "title": "OnyxClaw Sandbox 生命周期", "locale": "zh-CN", "quality_profile": "showcase", "viewBox": [980, 660] },
+  "lanes": [
+    { "id": "main", "label": "主生命周期" },
+    { "id": "recovery", "label": "恢复与数据面分支" }
+  ],
+  "states": [
+    { "id": "created", "type": "start", "label": "创建 Sandbox", "sublabel": "create", "lane": "main", "col": 0, "step": "01" },
+    { "id": "allocated", "type": "waiting", "label": "等待确认", "sublabel": "SOUL 待确认", "lane": "main", "col": 1, "step": "02" },
+    { "id": "configured", "type": "active", "label": "启动并配置", "sublabel": "runtime config", "lane": "main", "col": 2, "step": "03" },
+    { "id": "connected", "type": "success", "label": "已连接", "sublabel": "可聊天", "lane": "main", "col": 3, "step": "04" },
+    { "id": "paused", "type": "waiting", "label": "已暂停", "sublabel": "wrapper 与 workspace 保留", "lane": "main", "col": 4, "step": "05" },
+    { "id": "pending", "type": "failure", "label": "数据面待就绪", "sublabel": "resume-data-pending", "lane": "recovery", "col": 2, "yOffset": 48, "width": 140 }
+  ],
+  "transitions": [
+    { "from": "created", "to": "allocated" },
+    { "from": "allocated", "to": "configured" },
+    { "from": "configured", "to": "connected" },
+    { "from": "connected", "to": "paused" },
+    { "from": "paused", "to": "configured", "fromSide": "bottom", "toSide": "top", "via": [[710, 240], [402, 240]] },
+    { "from": "configured", "to": "pending", "fromSide": "bottom", "toSide": "top", "via": [[402, 390], [710, 390]] },
+    { "from": "pending", "to": "configured", "fromSide": "left", "toSide": "top", "via": [[600, 355], [20, 355], [20, 80], [402, 80]] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "暂停与恢复", "items": ["pause 保留 Sandbox wrapper 与持久化 workspace", "恢复后必须重新准备 runtime config 与 Channel", "控制面恢复不等于数据面已经就绪"] },
+    { "dot": "amber", "title": "数据面恢复", "items": ["出现 resume-data-pending 时不重复恢复或 pause", "再次操作只重试 runtime config 的数据面准备", "显式 kill 是终止操作，成功后才清理本地会话缓存"] }
+  ]
+}

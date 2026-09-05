@@ -33,6 +33,7 @@ npm run phase1:smoke
 | 当前指南 | [Provider 配置](./docs/provider-config.md) | Huawei AgentSphere 的非敏感样例、环境变量和验证边界 |
 | 当前指南 | [本地开发与验收](./docs/local-development.md) | 本机 Phase 0 生命周期回归和 Phase 1 控制台 |
 | 当前参考 | [Cloud APP runtime](./packages/cloud-runtime/README.md) | 云端编排、恢复与数据面语义 |
+| 当前参考 | [研发架构](./docs/development-architecture.md) | 研发运行时架构、聊天交付时序和 Sandbox 生命周期图 |
 | 术语 | [CONTEXT.md](./CONTEXT.md) | 聊天交付、镜像和文档治理术语 |
 | 架构决定 | [ADR](./docs/adr/) | 双镜像发布、Huawei-only 边界和文档治理决定 |
 | 历史证据 | [故障追踪器](./docs/huaweicloud-sandbox-resume-bug-tracker.md) | 已脱敏的诊断结论、时间线与镜像可追溯信息，不是操作指南 |

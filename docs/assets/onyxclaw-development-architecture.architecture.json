@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "OnyxClaw 研发架构",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/KianaBin/onyxclaw.git",
+      "revision": "3df78982051c9b0232bd59cf059e74a3254e6626"
+    },
+    "viewBox": [1120, 820]
+  },
+  "components": [
+    { "id": "browser", "type": "frontend", "label": "浏览器 UI", "sublabel": "聊天与 Sandbox 操作", "pos": [30, 350], "size": [130, 64], "sources": [{ "path": "packages/local-console/src/server.js", "label": "UI Server" }] },
+    { "id": "app", "type": "backend", "label": "OnyxClaw APP / BFF", "sublabel": "Controller · BootstrapSaga", "pos": [200, 350], "size": [170, 68], "sources": [{ "path": "packages/cloud-runtime/src/cloud-controller.js", "label": "CloudController" }, { "path": "packages/cloud-runtime/src/cloud-app.js", "label": "APP entry" }] },
+    { "id": "control", "type": "cloud", "label": "AgentSphere 控制面", "sublabel": "create / connect / pause / kill", "pos": [430, 190], "size": [170, 68], "sources": [{ "path": "packages/cloud-runtime/src/e2b-compatible-adapter.js", "label": "Adapter" }] },
+    { "id": "envd", "type": "security", "label": "Sandbox envd 数据面", "sublabel": "Files · Commands · health", "pos": [430, 500], "size": [170, 68], "sources": [{ "path": "packages/cloud-runtime/src/e2b-compatible-adapter.js", "label": "Data plane" }] },
+    { "id": "runtimeConfig", "type": "database", "label": "Sandbox 运行时配置", "sublabel": ".openclaw/openclaw.json", "pos": [640, 500], "size": [170, 68], "sources": [{ "path": "packages/cloud-runtime/src/openclaw-bootstrap.js", "label": "Config write target" }, { "path": "packages/cloud-runtime/src/cloud-app-support.js", "label": "Config builder" }] },
+    { "id": "channel", "type": "backend", "label": "OnyxClaw Channel", "sublabel": "WebSocket · inReplyTo", "pos": [840, 320], "size": [165, 68], "sources": [{ "path": "packages/onyxclaw-channel/src/channel.js", "label": "Channel plugin" }, { "path": "packages/onyxclaw-channel/src/inbound.js", "label": "Inbound delivery" }] },
+    { "id": "gateway", "type": "backend", "label": "OpenClaw Gateway", "sublabel": "会话、工具与模型编排", "pos": [840, 490], "size": [165, 68] },
+    { "id": "workspace", "type": "database", "label": "持久化 workspace", "sublabel": "SOUL.md 等用户状态", "pos": [840, 660], "size": [165, 64], "sources": [{ "path": "packages/cloud-runtime/src/openclaw-bootstrap.js", "label": "Workspace bootstrap" }] },
+    { "id": "model", "type": "external", "label": "模型服务", "pos": [1040, 490], "size": [70, 64], "sources": [{ "path": "config/providers.huaweicloud-agentsphere.example.json", "label": "Provider config" }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Huawei Cloud CCE", "wraps": ["app"], "pad": 38 },
+    { "kind": "security-group", "label": "AgentSphere：控制面与数据面使用不同凭据", "wraps": ["control", "envd"], "pad": 36 },
+    { "kind": "region", "label": "每个 Sandbox 的 OpenClaw 运行时", "wraps": ["runtimeConfig", "channel", "gateway", "workspace"], "pad": 32 }
+  ],
+  "connections": [
+    { "id": "ui-app", "from": "browser", "to": "app", "label": "HTTP UI / 聊天", "variant": "emphasis", "labelDy": 60 },
+    { "id": "app-control", "from": "app", "to": "control", "label": "控制面：生命周期调用", "variant": "security" },
+    { "id": "app-envd", "from": "app", "to": "envd", "label": "数据面：每 Sandbox 路由", "variant": "security" },
+    { "id": "envd-runtime-config", "from": "envd", "to": "runtimeConfig", "label": "写入 runtime 配置", "variant": "emphasis", "labelAt": [620, 496] },
+    { "id": "runtime-config-channel", "from": "runtimeConfig", "to": "channel", "label": "加载 Channel 配置与 bootstrap token" },
+    { "id": "app-channel", "from": "app", "to": "channel", "label": "WebSocket：入站事件 / 出站 inReplyTo", "variant": "emphasis" },
+    { "id": "channel-gateway", "from": "channel", "to": "gateway", "label": "派发消息与回复", "labelDy": 24 },
+    { "id": "gateway-model", "from": "gateway", "to": "model", "label": "模型请求", "labelDy": 58 },
+    { "id": "envd-workspace", "from": "envd", "to": "workspace", "label": "读取 / 写回 SOUL.md" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "研发定位", "items": ["BootstrapSaga 在 APP 内；经 envd 写入 Sandbox 配置", "改入站、出站与回复关联：onyxclaw-channel", "不包含镜像构建、CCE rollout 或 Template 发布"] },
+    { "dot": "amber", "title": "关键约束", "items": ["控制面恢复不等于数据面已就绪", "回复必须以 inReplyTo 指向对应入站 eventId", "敏感凭据不进入浏览器、日志或图中"] }
+  ]
+}

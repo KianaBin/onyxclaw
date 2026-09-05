@@ -7,8 +7,8 @@ OpenClaw 与 OnyxClaw Channel 的 Sandbox。仓库只维护 APP 与 Channel 两�
 输入和更新方案；实际部署操作由
 [onyxclaw-one-click](https://github.com/KianaBin/onyxclaw-one-click) 维护。
 
-可交互浏览的架构图见
-[OnyxClaw 当前架构图](./assets/onyxclaw-current-architecture.html)。图的可维护源定义为
+可交互浏览的构建与运行总览见
+[OnyxClaw 构建与运行总览](./assets/onyxclaw-current-architecture.html)。图的可维护源定义为
 [`onyxclaw-current-architecture.architecture.json`](./assets/onyxclaw-current-architecture.architecture.json)。
 
 ```mermaid
