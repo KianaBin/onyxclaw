@@ -28,6 +28,7 @@ npm run phase1:smoke
 
 | 类型 | 文档 | 说明 |
 | --- | --- | --- |
+| 当前指南 | [Agent 工作入口](./AGENTS.md) | 按任务读取文档、操作边界与完成条件 |
 | 当前规范 | [架构](./docs/architecture.md) | 组件责任、聊天交付、观测与构建边界；附交互式架构图 |
 | 当前指南 | [Huawei Cloud 镜像构建与更新](./docs/huaweicloud-image-build-and-update.md) | APP v19、APP 补丁、OpenClaw 基础镜像和完整 Channel 镜像 |
 | 当前指南 | [Provider 配置](./docs/provider-config.md) | Huawei AgentSphere 的非敏感样例、环境变量和验证边界 |
